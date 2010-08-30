@@ -33,8 +33,8 @@ XXX TODO mostly
   shows an interesting message.
 * Thus, you check your folders for new Maildir messages:
 
-  % coma inc
-  234 unseen mails
+    % coma inc
+    +INBOX              134 messages   129 unread     5 new
 
 * You setup a reading sequence you want to progress in; usually this
   is saved in your config, here is the explicit variant
@@ -64,18 +64,11 @@ XXX TODO mostly
 
 == Sending mail
 
-  XXX TODO
   % coma mail ... [-cc ...] [-bcc ...] [-att ...]
-  % coma edit
-  % coma send
 
-  XXX TODO
-  % coma reply
-  % coma send
+  % coma repl
 
-  XXX TODO
-  % coma forward
-  % coma send
+  % coma fwd
 
 == Dependencies
 
