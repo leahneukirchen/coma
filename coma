@@ -346,14 +346,18 @@ end
 def cmd_folders(*argv)
   num = Hash.new(0)
   unread = Hash.new(0)
+  new = Hash.new(0)
   Dir[File.expand_path($MAILDIR_PREFIX) + "/**/cur/*"].each { |file|
     num[File.dirname(file)] += 1
     unread[File.dirname(file)] += 1  unless file =~ /:2,.*S/
   }
+  Dir[File.expand_path($MAILDIR_PREFIX) + "/**/new/*"].each { |file|
+    new[File.dirname(file).gsub(%r{/new\z}, '/cur')] += 1
+  }
   num.keys.sort.each { |folder|
     f = folder.gsub(/\A#{Regexp.quote(File.expand_path($MAILDIR_PREFIX))}\/?/, '+').
     gsub(/\/cur\z/, '')
-    puts "%-20s %5d messages/%d unread" % [f, num[folder], unread[folder]]
+    puts "%-20s %5d messages %5d unread %5d new" % [f, num[folder], unread[folder], new[folder]]
   }
 end
 
