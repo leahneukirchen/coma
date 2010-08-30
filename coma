@@ -3,8 +3,11 @@
 
 require 'json'
 require 'fileutils'
+require 'tempfile'
 
 $MAILDIR_PREFIX = "~/Mail"
+
+COMA_VERSION = "0.1"
 
 def folder2path(folder)
   if File.directory?(folder + "/cur")
@@ -410,6 +413,97 @@ def cmd_folders(*argv)
     f = folder.gsub(/\A#{Regexp.quote(File.expand_path($MAILDIR_PREFIX))}\/?/, '+').
     gsub(/\/cur\z/, '')
     puts "%-20s %5d messages %5d unread %5d new" % [f, num[folder], unread[folder], new[folder]]
+  }
+end
+
+# http://www.jwz.org/doc/mid.html
+def generate_mid(from=nil)
+  require 'socket'
+
+  timestamp = (Time.now.to_f * 1000).to_i
+  random = rand(2**32)
+  fqdn = Socket.gethostbyname(Socket.gethostname).first
+  if fqdn =~ /localhost/ && from =~ /@(\w*\.\w*)/
+    # Better use the hostname in From:.
+    fqdn = $1
+  end
+  "<#{timestamp.to_s(36).upcase}.#{random.to_s(36).upcase}@#{fqdn}>"
+end
+
+HEADER_SEP = "--text follows this line--"
+def cmd_mail(*argv)
+  require 'tmail'
+
+  opts = parse argv
+  to = (opts['args'] + opts['to'].to_a).join(", ")
+  
+  with_context { |ctx|
+    if opts['repl']
+      ref = opts['repl'].first || "."
+      msg = ctx['seq'][ref2idx(ctx, ref)]
+      to = msg[5]
+      opts['subject'] = ["Re: " + strip_re(msg[2])]
+      irt = msg[1]
+    elsif opts['fwd']
+      # XXX mime with type=message/rfc822, when mhbuild is there
+      ref = opts['fwd'].first || "."
+      msg = ctx['seq'][ref2idx(ctx, ref)]
+      opts['subject'] = ["Fwd: " + strip_re(msg[2])]
+      from = msg[5]
+      original_mail = `metamail -B #{msg[0]}`
+    end
+
+    Tempfile.open("coma-mail") { |tmp|
+      tmp.puts("To: #{to}")
+      # XXX set from mail on reply
+      tmp.puts("Cc: #{opts['cc'].join(", ")}")    if opts['cc']
+      tmp.puts("Bcc: #{opts['bcc'].join(", ")}")  if opts['bcc']
+      tmp.puts("Subject: #{opts['subject'].to_a.join(" ")}")
+      tmp.puts("In-Reply-To: #{irt}")  if irt
+      tmp.puts("From: #{opts['from'] || ctx['from']}")  if opts['from'] || ctx['from']
+      tmp.puts(HEADER_SEP)
+      tmp.puts
+      begin
+        if original_mail
+          tmp.puts "----- Forwarded message from #{from} -----"
+          tmp.puts original_mail
+          tmp.puts "\n----- End forwarded message -----"
+        end
+
+        tmp.puts "--\n" + File.read(File.expand_path("~/.signature"))
+      rescue
+        # nevermind
+      end
+      tmp.close
+      
+      original = File.read(tmp.path)
+      system(ENV["VISUAL"] || ENV["EDITOR"] || "vi", tmp.path)
+      mail = File.read(tmp.path)
+      
+      if mail.empty? || mail == original || !mail.index(HEADER_SEP)
+        abort "mail canceled"
+      end
+      
+      parsed = TMail::Mail.parse(mail.sub(HEADER_SEP, ""))
+      from = parsed.from.to_a.first
+
+      headers, body = mail.split(HEADER_SEP, 2)
+      
+      headers << "Message-Id: #{generate_mid(from)}\n"
+      headers << "X-Mailer: coma/#{COMA_VERSION}\n"
+      
+      puts headers
+      puts body
+      
+      # XXX attachments, like mhbuilder
+
+      IO.popen("sendmail -t", "w") { |out|
+        out.write headers
+        out.write "\n"
+        out.write body
+      }
+      abort "sendmail failed"  unless $?.success?
+    }
   }
 end
 
