@@ -452,7 +452,6 @@ def cmd_mail(*argv)
       opts['subject'] = ["Re: " + strip_re(msg[2])]
       irt = msg[1]
     elsif opts['fwd']
-      # XXX mime with type=message/rfc822, when mhbuild is there
       ref = opts['fwd'].first || "."
       msg = ctx['seq'][ref2idx(ctx, ref)]
       opts['subject'] = ["Fwd: " + strip_re(msg[2])]
@@ -471,9 +470,11 @@ def cmd_mail(*argv)
       tmp.puts
       begin
         if original_mail
-          tmp.puts "----- Forwarded message from #{from} -----"
-          tmp.puts original_mail
-          tmp.puts "\n----- End forwarded message -----"
+#          tmp.puts "----- Forwarded message from #{from} -----"
+          tmp.puts "#<message/rfc822 <>{inline}"
+          tmp.puts original_mail.gsub(/^#/, '##')
+          tmp.puts "#"
+#          tmp.puts "\n----- End forwarded message -----"
         end
 
         opts['att'].to_a.each { |att|
@@ -510,15 +511,29 @@ def cmd_mail(*argv)
           headers << addheaders
         }
       end
-      
-      IO.popen("sendmail -t", "w") { |out|
-        out.write headers
-        out.write "\n"
-        out.write body
-      }
-      abort "sendmail failed"  unless $?.success?
+
+      if opts['debug']
+        puts headers
+        puts
+        puts body
+      else
+        IO.popen("sendmail -t", "w") { |out|
+          out.write headers
+          out.write "\n"
+          out.write body
+        }
+        abort "sendmail failed"  unless $?.success?
+      end
     }
   }
+end
+
+def cmd_repl(*args)
+  cmd_mail("-repl", *args)
+end
+
+def cmd_fwd(*args)
+  cmd_mail("-fwd", *args)
 end
 
 command = ARGV.first || 'usage'
