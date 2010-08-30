@@ -215,9 +215,9 @@ def cmd_read(*argv)
         seq = thread(seq)
       end
 
-      seq.reverse!  if opts['reverse']   # XXX wrong when threading
-
       seq = seq[-Integer(opts['last'].first || 20)..-1]  if opts['last']
+
+      seq.reverse!  if opts['reverse']   # XXX wrong when threading
 
       ctx['seq'] = seq
       ctx['cur'] = 1   # XXX good idea?
