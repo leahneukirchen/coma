@@ -194,6 +194,8 @@ def cmd_read(*argv)
     opts['args'].each { |folder|
       if opts['seq']
         seq = ctx['seq']
+        mid = seq[ctx['cur']][1]
+        p mid
         seq.each { |m|
           m[7] = 0  # reset depth
         }
@@ -238,7 +240,16 @@ def cmd_read(*argv)
       seq.reverse!  if opts['reverse']
 
       ctx['seq'] = seq
-      ctx['cur'] = 1   # XXX good idea?
+      ctx['cur'] = 1
+
+      if opts['seq']       # restore cur on -seq.
+        seq.each_with_index { |m, i|
+          if m[1] == mid
+            ctx['cur'] = i
+            break
+          end
+        }
+      end
     }
   }
 
