@@ -361,8 +361,8 @@ def ref2idx(ctx, ref)
 end
 
 def cmd_show(*argv)
-  argv = ["cur"]  if argv.empty?
   opts = parse argv
+  opts['args'] = ["."]  if opts['args'].empty?
 
   if $stdout.tty? && !opts['nopager']
     $stdout = IO.popen("less -FRWX", "w")
@@ -377,7 +377,7 @@ def cmd_show(*argv)
         if opts['path']
           puts file
         elsif opts['raw']
-          system "less #{file}"
+          puts File.read(file)
         else
           puts "\C-l\n" + "#"*term_width if i > 0
           puts `metamail -B #{file}`
@@ -440,8 +440,15 @@ def cmd_mail(*argv)
   with_context { |ctx|
     if opts['repl']
       ref = opts['repl'].first || "."
-      msg = ctx['seq'][ref2idx(ctx, ref)]
-      to = msg[5]
+      msg = ctx['seq'][ref2idx(ctx, ref) - 1]
+
+      re = TMail::Mail.parse(File.read(msg[0]))
+      if re['reply-to'] && !opts['noreplyto']
+        to = re['reply-to'].to_s
+      else
+        to = msg[5]
+      end
+      opts['cc'] ||= [re.cc.to_s]  unless opts['noreplyall']
       opts['subject'] = ["Re: " + strip_re(msg[2])]
       irt = msg[1]
     elsif opts['fwd']
@@ -455,7 +462,6 @@ def cmd_mail(*argv)
 
     Tempfile.open("coma-mail") { |tmp|
       tmp.puts("To: #{to}")
-      # XXX set from mail on reply
       tmp.puts("Cc: #{opts['cc'].join(", ")}")    if opts['cc']
       tmp.puts("Bcc: #{opts['bcc'].join(", ")}")  if opts['bcc']
       tmp.puts("Subject: #{opts['subject'].to_a.join(" ")}")
