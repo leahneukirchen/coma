@@ -65,10 +65,14 @@ def cmd_inc(*argv)
     opts['args'].each { |folder|
       ctx['folder'] = folder
       cache = {}
-      num = unread = 0
+      num = unread = new = 0
+      Dir[folder2path(folder) + "/../new/*"].each { |file|
+        File.rename file, "#{folder2path(folder)}/#{File.basename(file)}:2,"
+        new += 1
+      }
       Dir[folder2path(folder) + "/*"].each { |file|
         email = TMail::Mail.parse(File.read(file))
-        flags = file[/:2,([a-z]*)/i, 1].upcase
+        flags = file[/:2,([a-z]*)/i, 1].to_s.upcase
         
         cache[file] = [email.message_id, email.subject, email.date.to_f,
                        flags, email['from'],
@@ -80,7 +84,7 @@ def cmd_inc(*argv)
       
       File.open(folder2cache(folder), "w") { |f| f << JSON.pretty_generate(cache) }
       
-      puts "%-20s %5d messages/%d unread" % [folder, num, unread]  unless opts['q']
+      puts "%-20s %5d messages %5d unread %5d new" % [folder, num, unread, new]  unless opts['q']
     }
   }
 end
