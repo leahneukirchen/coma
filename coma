@@ -190,12 +190,19 @@ def cmd_read(*argv)
     opts['args'] = [ctx['folder']] if opts['args'].empty?
 
     opts['args'].each { |folder|
-      cache = File.open(folder2cache(folder)) { |f| JSON.load(f) }
-
-      seq = []
-      cache.each { |k, v|
-        seq << [k, *v]
-      }
+      if opts['seq']
+        seq = ctx['seq']
+        seq.each { |m|
+          m[7] = 0  # reset depth
+        }
+      else
+        cache = File.open(folder2cache(folder)) { |f| JSON.load(f) }
+        
+        seq = []
+        cache.each { |k, v|
+          seq << [k, *v]
+        }
+      end
 
       seq.delete_if { |file, *fields| fields[3] !~ /F/ }  if opts['flagged']
       seq.delete_if { |file, *fields| fields[3] =~ /F/ }  if opts['unflagged']
@@ -205,16 +212,20 @@ def cmd_read(*argv)
       seq.delete_if { |file, *fields| fields[3] =~ /R/ }  if opts['unreplied']
       # -all
 
-      # XXX MH has a better interpretation of sorting/grouping, and -limit etc.
-
       if opts['subject']
         seq = seq.sort_by { |file, *fields|
-          strip_re(fields[1])
+          [opts['limit'] ? fields[2].to_i/(24*60*60*opts['limit'].first.to_i) : 0,
+           strip_re(fields[1]),
+           fields[2]]
         }
       elsif opts['date']
         seq = seq.sort_by { |file, *fields| fields[2] }
       elsif opts['from']
-        seq = seq.sort_by { |file, *fields| fields[4] }
+        seq = seq.sort_by { |file, *fields|
+          [opts['limit'] ? fields[2].to_i/(24*60*60*opts['limit'].first.to_i) : 0,
+           fields[4],
+           fields[2]]
+        }
       elsif opts['thread'] || true     # XXX make default configurable
         seq = thread(seq)
       end
