@@ -197,20 +197,26 @@ def cmd_read(*argv)
     opts['args'] = [ctx['folder']] if opts['args'].empty?
 
     opts['args'].each { |folder|
-      if opts['seq']
-        seq = ctx['seq']
-        mid = seq[ctx['cur']][1]
-        p mid
-        seq.each { |m|
-          m[7] = 0  # reset depth
-        }
-      else
-        cache = File.open(folder2cache(folder)) { |f| JSON.load(f) }
-        
-        seq = []
-        cache.each { |k, v|
-          seq << [k, *v]
-        }
+      begin
+        idx = ref2idx(ctx, folder)
+        seq = ctx['seq'].values_at(*idx.map { |x| x-1 })
+        abort "invalid references"  if seq.include?(nil)
+      rescue ArgumentError
+        if opts['seq']
+          seq = ctx['seq']
+          mid = seq[ctx['cur']][1]
+          p mid
+          seq.each { |m|
+            m[7] = 0  # reset depth
+          }
+        else
+          cache = File.open(folder2cache(folder)) { |f| JSON.load(f) }
+          
+          seq = []
+          cache.each { |k, v|
+            seq << [k, *v]
+          }
+        end
       end
 
       seq.delete_if { |file, *fields| fields[3] !~ /F/ }  if opts['flagged']
@@ -329,11 +335,14 @@ def ref2idx(ctx, ref)
   end
       
   case ref
+  when /.-./
+    a, b = ref.split("-", 2)
+    ref2idx(ctx, a)..ref2idx(ctx, b)
   when /\A[+-]\d+\z/
     if ctx['seq'][ctx['cur'] - 1 + Integer(ref)]
       ctx['cur'] + Integer(ref)
     else
-      abort "invalid reference"
+      raise ArgumentError, "invalid reference"
     end
   when /\A\d+\z/
     Integer(ref)
@@ -341,8 +350,10 @@ def ref2idx(ctx, ref)
     1
   when "last"
     ctx['seq'].size
+  when "all"
+    1..ctx['seq'].size
   else
-    abort "invalid reference"
+    raise ArgumentError, "invalid reference"
   end
 end
 
@@ -351,29 +362,33 @@ def cmd_show(*argv)
   opts = parse argv
 
   if $stdout.tty? && !opts['nopager']
-    $stdout = IO.popen("less", "w")
+    $stdout = IO.popen("less -FRWX", "w")
     at_exit { $stdout.close }
   end
 
   with_context { |ctx|
     opts['args'].each_with_index { |ref, i|
-      ctx['cur'] = ref2idx(ctx, ref)
-      file = ctx['seq'][ctx['cur'] - 1][0]
-      if opts['path']
-        puts file
-      elsif opts['raw']
-        system "less #{file}"
-      else
-        puts "\C-l\n" + "#"*term_width if i > 0
-        puts `metamail -B #{file}`
-      end
-      # XXX mark seen
+      ref2idx(ctx, ref).to_a.each { |idx|
+        ctx['cur'] = idx
+        file = ctx['seq'][ctx['cur'] - 1][0]
+        if opts['path']
+          puts file
+        elsif opts['raw']
+          system "less #{file}"
+        else
+          puts "\C-l\n" + "#"*term_width if i > 0
+          puts `metamail -B #{file}`
+        end
+        # XXX mark seen
+      }
     }
   }
 end
 
 def cmd_next
   cmd_show("next")
+rescue ArgumentError
+  abort "no more mail"
 end
 
 def cmd_prev
