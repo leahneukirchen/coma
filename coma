@@ -40,6 +40,11 @@ def contextfile
   File.expand_path("~/.config/coma/context")
 end
 
+def term_width
+  # XXX stty would be better; good enough with urxvt/xterm, bash/zsh
+  ENV["COLUMNS"].to_i.nonzero? || 80
+end
+
 def parse(argv)
   opt = "args"
   opts = {"args" => []}
@@ -291,6 +296,7 @@ end
 
 def cmd_scan(*argv) 
   return cmd_read(*argv)  unless argv.empty?
+  opts = parse argv
 
   # XXX this can be improved.  implement a whole templating language? ugh.
   with_context { |ctx|
@@ -300,13 +306,14 @@ def cmd_scan(*argv)
 #      puts "%4d%s%s%s\n%-3s  %s  %s" % [i+1, (i+1 == cur ? "*" : " "),
 #                                      "  "*depth, s, fl,
 #                                      Time.at(d).strftime("%Y-%m-%d %H:%M"), fr]
+      width = opts['width'] ? opts['width'].first.to_i : term_width
       # timely-like single-line format
       puts "%4d%1s%1s%9s  %s  %s\n" % [i+1, (i+1 == cur ? "+" :
                                              (fl !~ /S/ ? "." : " ")),
                                        (fl =~ /R/ ? "-" : " "),
                                        nicedate(Time.at(d)),
                                        nicefrom(fr, 17),
-                                       nicesubj(s, 43, depth)]
+                                       nicesubj(s, width-37, depth)]
     }
   }
 end
@@ -343,8 +350,13 @@ def cmd_show(*argv)
   argv = ["cur"]  if argv.empty?
   opts = parse argv
 
+  if $stdout.tty? && !opts['nopager']
+    $stdout = IO.popen("less", "w")
+    at_exit { $stdout.close }
+  end
+
   with_context { |ctx|
-    opts['args'].each { |ref|
+    opts['args'].each_with_index { |ref, i|
       ctx['cur'] = ref2idx(ctx, ref)
       file = ctx['seq'][ctx['cur'] - 1][0]
       if opts['path']
@@ -352,8 +364,8 @@ def cmd_show(*argv)
       elsif opts['raw']
         system "less #{file}"
       else
-        # XXX only fork single pager
-        system "metamail -B #{file} |less"
+        puts "\C-l\n" + "#"*term_width if i > 0
+        puts `metamail -B #{file}`
       end
       # XXX mark seen
     }
