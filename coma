@@ -415,9 +415,20 @@ def cmd_prev
 end
 
 def cmd_folders(*argv)
+  opts = parse argv
+
   num = Hash.new(0)
   unread = Hash.new(0)
   new = Hash.new(0)
+
+  if opts['list']
+    puts Dir[File.expand_path($MAILDIR_PREFIX) + "/**/cur"].map { |folder|
+      f = folder.gsub(/\A#{Regexp.quote(File.expand_path($MAILDIR_PREFIX))}\/?/, '+').
+      gsub(/\/cur\z/, '')
+    }
+    return
+  end
+
   Dir[File.expand_path($MAILDIR_PREFIX) + "/**/cur/*"].each { |file|
     num[File.dirname(file)] += 1
     unread[File.dirname(file)] += 1  unless file =~ /:2,.*S/
