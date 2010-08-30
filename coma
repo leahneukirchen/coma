@@ -470,6 +470,10 @@ def cmd_mail(*argv)
           tmp.puts "\n----- End forwarded message -----"
         end
 
+        opts['att'].to_a.each { |att|
+          tmp.puts "##{`file --mime-type -bL '#{att}'`.strip} #{att}"
+        }
+
         tmp.puts "--\n" + File.read(File.expand_path("~/.signature"))
       rescue
         # nevermind
@@ -491,12 +495,16 @@ def cmd_mail(*argv)
       
       headers << "Message-Id: #{generate_mid(from)}\n"
       headers << "X-Mailer: coma/#{COMA_VERSION}\n"
-      
-      puts headers
-      puts body
-      
-      # XXX attachments, like mhbuilder
 
+      if body =~ /^#/
+        IO.popen("mhbuild -", "w+") { |io|
+          io.write body
+          io.close_write
+          addheaders, body = io.read.split("\n\n", 2)
+          headers << addheaders
+        }
+      end
+      
       IO.popen("sendmail -t", "w") { |out|
         out.write headers
         out.write "\n"

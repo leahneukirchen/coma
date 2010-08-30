@@ -81,7 +81,8 @@ XXX TODO mostly
 
 tmail and json.  Only tested with Ruby 1.8.
 
-coma currently needs metamail(1) to display mail.
+coma currently needs metamail(1) to display mail and file(1) and
+mhbuild(1) to send MIME mail.
 
 == ZSH integration
 
