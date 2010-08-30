@@ -357,6 +357,16 @@ def ref2idx(ctx, ref)
     ctx['seq'].size
   when "all"
     1..ctx['seq'].size
+  when "thread"
+    start = ctx['cur']
+    while ctx['seq'][start-1][7] > 0 && start >= 1
+      start -= 1
+    end
+    stop = start+1
+    while ctx['seq'][stop-1][7] != 0 && stop < ctx['seq'].size
+      stop += 1
+    end
+    start..stop-1
   else
     raise ArgumentError, "invalid reference"
   end
