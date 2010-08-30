@@ -85,6 +85,13 @@ mhbuild(1) to send MIME mail.
 
   XXX TODO, rough port of exmh to be expected.
 
+== Can I ...?
+
+I accept no feature requests at this point; coma will become *my*
+perfect mail reader.  But you are welcome to fork and patch, and maybe
+in a few months, we can figure out what's good and what not, and then
+merge accordingly.
+
 == Copying
 
 Written by Christian Neukirchen <http://purl.org/net/chneukirchen>.
