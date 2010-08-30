@@ -1,0 +1,343 @@
+#!/usr/bin/env ruby
+# -*- ruby -*-
+
+require 'json'
+require 'fileutils'
+
+$MAILDIR_PREFIX = "~/Mail"
+
+def folder2path(folder)
+  if File.directory?(folder + "/cur")
+    folder + "/cur"
+  elsif File.directory?(folder)
+    folder
+  else
+    case folder
+    when /\A\+([\/.~].*)/
+      File.expand_path($1) + "/cur"
+    when /\A\+(.*)/
+      File.expand_path($MAILDIR_PREFIX) + $1 + "/cur"
+    end
+  end
+end
+
+def folder2cache(folder)
+  File.expand_path(folder2path(folder) + "/../.coma.cache")
+end
+
+# XXX locking
+def with_context
+  unless File.directory?(File.expand_path("~/.config/coma"))
+    FileUtils.mkdir_p(File.expand_path("~/.config/coma"))
+  end
+  
+  ctx = File.open(contextfile) { |f| JSON.load(f) } rescue {}
+  yield ctx
+  File.open(contextfile, "w") { |f| f << JSON.pretty_generate(ctx) }
+end
+
+def contextfile
+  File.expand_path("~/.config/coma/context")
+end
+
+def parse(argv)
+  opt = "args"
+  opts = {"args" => []}
+
+  argv.each { |arg|
+    if arg =~ /\A-/
+      opt = $'
+      opts[opt] = []
+    else
+      opts[opt] << arg
+    end
+  }
+
+  opts
+end
+
+def cmd_inc(*argv)
+  require 'tmail'
+
+  opts = parse argv
+
+  with_context { |ctx|
+    opts['args'].each { |folder|
+      ctx['folder'] = folder
+      cache = {}
+      num = unread = 0
+      Dir[folder2path(folder) + "/*"].each { |file|
+        email = TMail::Mail.parse(File.read(file))
+        flags = file[/:2,([a-z]*)/i, 1].upcase
+        
+        cache[file] = [email.message_id, email.subject, email.date.to_f,
+                       flags, email['from'],
+                       email.in_reply_to && email.in_reply_to.first,
+                       0]
+        num += 1
+        unread += 1  unless flags =~ /S/
+      }
+      
+      File.open(folder2cache(folder), "w") { |f| f << JSON.pretty_generate(cache) }
+      
+      puts "%-20s %4d messages/%d unread" % [folder, num, unread]  unless opts['q']
+    }
+  }
+end
+
+# based on mhthread, mostly works
+# 24aug2010  +chris+
+def thread(seq)
+  mails = seq.map { |file, mid, subj, date, flags, from, irt, depth|
+    re_in_subj = false
+    sortsubj = subj.strip.gsub(/^(re\[\d+\][:;]\s*)+/i) {
+      re_in_subj = true
+      ""
+    }
+
+    {:mid => mid, :subj => sortsubj, :orig_subj => subj,
+      :re_in_subj => re_in_subj, :irt => irt, :date => date,
+      :from => from, :file => file, :flags => flags
+    }
+  }
+
+  mid2msg = {}
+  tree = {}
+  toplevel = {}
+  subjtop = {}
+  subjsets = {}
+  subjearliest = {}
+
+  mails.each { |msg|
+    mid = msg[:mid]
+    irt = msg[:irt]
+
+    mid2msg[mid] = msg
+    
+    tree[mid] ||= {}
+    
+    unless irt
+      toplevel[mid] = msg
+      subjtop[msg[:subj]] = msg  unless msg[:re_in_subj]
+      (subjsets[msg[:subj]] ||= []) << msg
+      
+      if !subjearliest[msg[:subj]] || subjearliest[msg[:subj]] > msg[:date]
+        subjearliest[msg[:subj]] = msg[:date]
+      end
+    else
+      tree[irt] ||= {}
+      tree[irt][mid] = msg
+    end
+  }
+
+  tree.each { |mid, _|
+    next  if mid2msg[mid]
+    
+    tree[mid].each { |kid, _|
+      msg = mid2msg[kid]
+      mid = msg[:mid]
+      next  if toplevel[mid]
+      
+      toplevel[mid] = msg
+      subjtop[msg[:subj]] = msg  unless msg[:re_in_subj]
+      (subjsets[msg[:subj]] ||= []) << msg
+      
+      if !subjearliest[msg[:subj]] || subjearliest[msg[:subj]] > msg[:date]
+        subjearliest[msg[:subj]] = msg[:date]
+      end
+    }
+  }
+
+  subjsets.each { |subj, _|
+    parent = subjtop[subj]
+    next  unless parent
+    
+    subjsets[subj].each { |msg|
+      if msg[:re_in_subj]
+        tree[parent[mid]][msg[:mid]] = msg
+        toplevel.delete msg[:mid]
+      end
+    }
+  }
+
+  sorted = []
+  rec = lambda { |level, mid, msg|
+    sorted << (msg.values_at(:file, :mid, :orig_subj, :date, :flags, :from, :irt) << level)
+    tree[mid].keys.sort_by { |a| mid2msg[a][:date] }.each { |kid|
+      rec[level+1, kid, tree[mid][kid]]
+    }
+  }
+
+  toplevel.keys.sort_by { |mid|
+    [ subjearliest[mid].to_s, toplevel[mid][:date] ]
+  }.each { |top|
+    rec[0, top, toplevel[top]]
+  }
+
+  sorted
+end
+
+def cmd_read(*argv)
+  opts = nil
+  with_context { |ctx|
+    argv = [ctx['folder'], '-unseen', '-thread']  if argv.empty?
+    opts = parse argv
+
+    opts['args'] = [ctx['folder']] if opts['args'].empty?
+
+    opts['args'].each { |folder|
+      cache = File.open(folder2cache(folder)) { |f| JSON.load(f) }
+
+      seq = []
+      cache.each { |k, v|
+        seq << [k, *v]
+      }
+
+      seq.delete_if { |file, *fields| fields[3] !~ /F/ }  if opts['flagged']
+      seq.delete_if { |file, *fields| fields[3] =~ /F/ }  if opts['unflagged']
+      seq.delete_if { |file, *fields| fields[3] !~ /S/ }  if opts['seen']
+      seq.delete_if { |file, *fields| fields[3] =~ /S/ }  if opts['unseen']
+      seq.delete_if { |file, *fields| fields[3] !~ /R/ }  if opts['replied']
+      seq.delete_if { |file, *fields| fields[3] =~ /R/ }  if opts['unreplied']
+      # -all
+
+      # XXX MH has a better interpretation of sorting/grouping, and -limit etc.
+
+      if opts['subject']
+        seq = seq.sort_by { |file, *fields|
+          strip_re(fields[1])
+        }
+      elsif opts['date']
+        seq = seq.sort_by { |file, *fields| fields[2] }
+      elsif opts['from']
+        seq = seq.sort_by { |file, *fields| fields[4] }
+      elsif opts['thread'] || true     # XXX make default configurable
+        seq = thread(seq)
+      end
+
+      seq.reverse!  if opts['reverse']   # XXX wrong when threading
+
+      seq = seq[-Integer(opts['last'].first || 20)..-1]  if opts['last']
+
+      ctx['seq'] = seq
+      ctx['cur'] = 1   # XXX good idea?
+    }
+  }
+
+  cmd_scan  unless opts['q']
+end
+
+$now = Time.now
+def nicedate(t)
+  if $now.year == t.year && $now.month == t.month
+    if $now.day == t.day
+      t.strftime("%H:%M")
+    else
+      t.strftime("%b %d")
+    end
+  else
+    t.strftime("%Y-%m-%d")
+  end
+end
+
+def nicefrom(t, size)
+  if t =~ /(.*) <.*>/
+    t = $1.delete('"')
+  end
+  t = t.strip.squeeze(" ")
+  t[0, size].ljust(size)
+end
+
+def strip_re(s)
+  s.strip.gsub(/^(re(\[\d+\])?[:;]\s*)+/i) {
+    yield  if block_given?
+    ""
+  }
+end
+
+def nicesubj(s, size, depth)
+  s = strip_re(s)  if depth > 0
+  ("  "*depth + s)[0, size].ljust(size)
+end
+
+def cmd_scan(*argv) 
+  return cmd_read(*argv)  unless argv.empty?
+
+  # XXX this can be improved.  implement a whole templating language? ugh.
+  with_context { |ctx|
+    cur = ctx['cur']
+    ctx['seq'].each_with_index { |(_,_,s,d,fl,fr,_,depth), i|
+# XXX simple two-line format
+#      puts "%4d%s%s%s\n%-3s  %s  %s" % [i+1, (i+1 == cur ? "*" : " "),
+#                                      "  "*depth, s, fl,
+#                                      Time.at(d).strftime("%Y-%m-%d %H:%M"), fr]
+      # timely-like single-line format
+      puts "%4d%1s %9s  %s  %s\n" % [i+1, (i+1 == cur ? "*" : " "),
+                                     nicedate(Time.at(d)),
+                                     nicefrom(fr, 17),
+                                     nicesubj(s, 43, depth)]
+    }
+  }
+end
+
+def ref2idx(ctx, ref)
+  case ref
+  when "next"
+    ref = "+1"
+  when "prev"
+    ref = "-1"
+  when "cur", "."
+    ref = "+0"
+  end
+      
+  case ref
+  when /\A[+-]\d+\z/
+    if ctx['seq'][ctx['cur'] - 1 + Integer(ref)]
+      ctx['cur'] + Integer(ref)
+    else
+      abort "invalid reference"
+    end
+  when /\A\d+\z/
+    Integer(ref)
+  when "first"
+    1
+  when "last"
+    ctx['seq'].size
+  else
+    abort "invalid reference"
+  end
+end
+
+def cmd_show(*argv)
+  argv = ["cur"]  if argv.empty?
+  opts = parse argv
+
+  with_context { |ctx|
+    opts['args'].each { |ref|
+      ctx['cur'] = ref2idx(ctx, ref)
+      file = ctx['seq'][ctx['cur'] - 1][0]
+      if opts['path']
+        puts file
+      elsif opts['raw']
+        system "less #{file}"
+      else
+        # XXX only fork single pager
+        system "metamail -B #{file} |less"
+      end
+      # XXX mark seen
+    }
+  }
+end
+
+def cmd_next
+  cmd_show("next")
+end
+
+def cmd_prev
+  cmd_show("prev")
+end
+
+command = ARGV.first || 'usage'
+if defined?("cmd_#{command}")
+  send "cmd_#{command}", *ARGV[1..-1]
+end

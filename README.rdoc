@@ -1,0 +1,101 @@
+= coma - a console mail user agent
+
+== About
+
+This is coma, a simple but powerful console mail user agent.  You can
+think of it as a modern (that is, post-2000) alternative to the
+venerable MH, RAND Mail Handler.
+
+coma aims to provide a surrogate for MH that works well in modern
+environments.  The main differences are:
+
+* coma uses Maildir as backing store; this is more reliable and widely
+  supported.
+* coma has built-in MIME support.
+* coma has built-in threading support (using jwz's algorithm).
+* coma is a single, extensible script written in Ruby, so you can
+  implement complex features in it easily without having to write C.
+
+Yet, coma also is a lot like MH:
+
+* it is command-driven, featuring a non-captive interface, unlike
+  tools like mailx or mutt.  It is well suited for parallel use for
+  multiple terminals and thus a good fit for screen/tmux/xterms.
+* it is a MUA only.  Mail delivery and transfer is the task of other
+  tools.
+
+== Workflow
+
+How do you use coma?  The default workflow for coma works like this:
+XXX TODO mostly
+
+* You are bored and want to read mail, or your xlbiff pops up and
+  shows an interesting message.
+* Thus, you check your folders for new Maildir messages:
+
+  % coma inc
+  234 unseen mails
+
+* You setup a reading sequence you want to progress in; usually this
+  is saved in your config, here is the explicit variant
+
+  % coma read +INBOX +ruby-talk -thread
+  [...scan lines of new mail...]
+
+* You read the mails:
+  % coma show
+  % coma next
+  % coma next
+  % coma next
+  .
+  .
+  .
+  % coma next
+  no more mail
+
+* You are done.
+
+* It is highly advised that you alias ,=coma.
+
+== Searching mail
+
+  XXX TODO
+  % mairix foobar -r | coma read -
+
+== Sending mail
+
+  XXX TODO
+  % coma mail ... [-cc ...] [-bcc ...] [-att ...]
+  % coma edit
+  % coma send
+
+  XXX TODO
+  % coma reply
+  % coma send
+
+  XXX TODO
+  % coma forward
+  % coma send
+
+== Dependencies
+
+tmail and json.  Only tested with Ruby 1.8.
+
+coma currently needs metamail(1) to display mail.
+
+== ZSH integration
+
+  XXX TODO
+
+== tkma
+
+  XXX TODO, rough port of exmh to be expected.
+
+== Copying
+
+Written by Christian Neukirchen <http://purl.org/net/chneukirchen>.
+
+To the extent possible under law, the creator of this work has waived
+all copyright and related or neighboring rights to this work.
+
+http://creativecommons.org/publicdomain/zero/1.0/
