@@ -390,6 +390,10 @@ def cmd_show(*argv)
           puts file
         elsif opts['raw']
           puts File.read(file)
+        elsif opts['idx']
+          puts idx
+        elsif opts['select']
+          # do nothing
         else
           puts "\C-l\n" + "#"*term_width if i > 0
           puts `metamail -B #{file}`
