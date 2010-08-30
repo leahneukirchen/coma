@@ -272,10 +272,12 @@ def cmd_scan(*argv)
 #                                      "  "*depth, s, fl,
 #                                      Time.at(d).strftime("%Y-%m-%d %H:%M"), fr]
       # timely-like single-line format
-      puts "%4d%1s %9s  %s  %s\n" % [i+1, (i+1 == cur ? "*" : " "),
-                                     nicedate(Time.at(d)),
-                                     nicefrom(fr, 17),
-                                     nicesubj(s, 43, depth)]
+      puts "%4d%1s%1s%9s  %s  %s\n" % [i+1, (i+1 == cur ? "+" :
+                                             (fl !~ /S/ ? "." : " ")),
+                                       (fl =~ /R/ ? "-" : " "),
+                                       nicedate(Time.at(d)),
+                                       nicefrom(fr, 17),
+                                       nicesubj(s, 43, depth)]
     }
   }
 end
