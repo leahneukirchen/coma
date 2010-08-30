@@ -16,7 +16,7 @@ def folder2path(folder)
     when /\A\+([\/.~].*)/
       File.expand_path($1) + "/cur"
     when /\A\+(.*)/
-      File.expand_path($MAILDIR_PREFIX) + $1 + "/cur"
+      File.expand_path($MAILDIR_PREFIX) + "/" + $1 + "/cur"
     end
   end
 end
@@ -80,7 +80,7 @@ def cmd_inc(*argv)
       
       File.open(folder2cache(folder), "w") { |f| f << JSON.pretty_generate(cache) }
       
-      puts "%-20s %4d messages/%d unread" % [folder, num, unread]  unless opts['q']
+      puts "%-20s %5d messages/%d unread" % [folder, num, unread]  unless opts['q']
     }
   }
 end
@@ -335,6 +335,20 @@ end
 
 def cmd_prev
   cmd_show("prev")
+end
+
+def cmd_folders(*argv)
+  num = Hash.new(0)
+  unread = Hash.new(0)
+  Dir[File.expand_path($MAILDIR_PREFIX) + "/**/cur/*"].each { |file|
+    num[File.dirname(file)] += 1
+    unread[File.dirname(file)] += 1  unless file =~ /:2,.*S/
+  }
+  num.keys.sort.each { |folder|
+    f = folder.gsub(/\A#{Regexp.quote(File.expand_path($MAILDIR_PREFIX))}\/?/, '+').
+    gsub(/\/cur\z/, '')
+    puts "%-20s %5d messages/%d unread" % [f, num[folder], unread[folder]]
+  }
 end
 
 command = ARGV.first || 'usage'
