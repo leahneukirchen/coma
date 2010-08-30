@@ -91,7 +91,7 @@ end
 
 # based on mhthread, mostly works
 # 24aug2010  +chris+
-def thread(seq)
+def thread(seq, reverse)
   mails = seq.map { |file, mid, subj, date, flags, from, irt, depth|
     re_in_subj = false
     sortsubj = subj.strip.gsub(/^(re\[\d+\][:;]\s*)+/i) {
@@ -172,9 +172,11 @@ def thread(seq)
     }
   }
 
-  toplevel.keys.sort_by { |mid|
+  tops = toplevel.keys.sort_by { |mid|
     [ subjearliest[mid].to_s, toplevel[mid][:date] ]
-  }.each { |top|
+  }
+  tops.reverse!  if reverse
+  tops.each { |top|
     rec[0, top, toplevel[top]]
   }
 
@@ -227,12 +229,13 @@ def cmd_read(*argv)
            fields[2]]
         }
       elsif opts['thread'] || true     # XXX make default configurable
-        seq = thread(seq)
+        seq = thread(seq, opts['reverse'])
+        opts.delete 'reverse'
       end
 
       seq = seq[-Integer(opts['last'].first || 20)..-1]  if opts['last']
 
-      seq.reverse!  if opts['reverse']   # XXX wrong when threading
+      seq.reverse!  if opts['reverse']
 
       ctx['seq'] = seq
       ctx['cur'] = 1   # XXX good idea?
