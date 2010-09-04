@@ -269,7 +269,13 @@ def cmd_read(*argv)
     end
   }
 
-  cmd_scan  unless opts['q']
+  unless opts['q']
+    if opts['width']
+      cmd_scan("-width", *opts['width'])
+    else
+      cmd_scan
+    end
+  end
 end
 
 $now = Time.now
@@ -302,12 +308,12 @@ end
 
 def nicesubj(s, size, depth)
   s = strip_re(s)  if depth > 0
-  ("  "*depth + s)[0, size].ljust(size)
+  ("  "*depth + s)[0, size].to_s.ljust(size)
 end
 
 def cmd_scan(*argv) 
-  return cmd_read(*argv)  unless argv.empty?
   opts = parse argv
+  return cmd_read(*argv)  unless opts['args'].empty?
 
   # XXX this can be improved.  implement a whole templating language? ugh.
   with_context { |ctx|
