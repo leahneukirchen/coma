@@ -104,7 +104,6 @@ _coma_ref(){
 }
 
 _coma_folder(){
-    coma folders -list
     compadd - $(coma folders -list)
 }
 
