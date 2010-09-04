@@ -85,6 +85,8 @@ images, mhbuild(1) to send MIME mail.
 
 tkma provides a very early exmh-like interface for coma.  Needs Tk.
 
+http://imgur.com/n6dFT.png
+
 == Can I ...?
 
 I accept no feature requests at this point; coma will become *my*
