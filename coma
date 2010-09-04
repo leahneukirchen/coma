@@ -5,6 +5,7 @@
 require 'json'
 require 'fileutils'
 require 'tempfile'
+require 'time'
 
 require 'minimime'
 
@@ -68,8 +69,6 @@ def parse(argv)
 end
 
 def cmd_inc(*argv)
-  require 'tmail'
-
   opts = parse argv
 
   with_context { |ctx|
@@ -82,12 +81,12 @@ def cmd_inc(*argv)
         new += 1
       }
       Dir[folder2path(folder) + "/*"].each { |file|
-        email = TMail::Mail.parse(File.read(file))
+        email = MiniMime.new(File.read(file).gsub("\n", "\r\n"))
         flags = file[/:2,([a-z]*)/i, 1].to_s.upcase
         
-        cache[file] = [email.message_id, email.subject, email.date.to_f,
-                       flags, email['from'],
-                       email.in_reply_to && email.in_reply_to.first,
+        cache[file] = [email["message-id"], email["subject"] || "(no subject)", Time.parse(email["date"]).to_f,
+                       flags, email["from"],
+                       email["in-reply-to"],
                        0]
         num += 1
         unread += 1  unless flags =~ /S/
@@ -475,8 +474,6 @@ end
 
 HEADER_SEP = "--text follows this line--"
 def cmd_mail(*argv)
-  require 'tmail'
-
   opts = parse argv
   to = (opts['args'] + opts['to'].to_a).join(", ")
   
@@ -485,13 +482,13 @@ def cmd_mail(*argv)
       ref = opts['repl'].first || "."
       msg = ctx['seq'][ref2idx(ctx, ref) - 1]
 
-      re = TMail::Mail.parse(File.read(msg[0]))
+      re = MiniMime.new(File.read(msg[0]).gsub("\n", "\r\n"))
       if re['reply-to'] && !opts['noreplyto']
         to = re['reply-to'].to_s
       else
         to = msg[5]
       end
-      opts['cc'] ||= [re.cc.to_s]  unless opts['noreplyall']
+      opts['cc'] ||= [re['cc']]  unless opts['noreplyall'] || !re['cc']
       opts['subject'] = ["Re: " + strip_re(msg[2])]
       irt = msg[1]
     elsif opts['fwd']
@@ -538,8 +535,8 @@ def cmd_mail(*argv)
         abort "mail canceled"
       end
       
-      parsed = TMail::Mail.parse(mail.sub(HEADER_SEP, ""))
-      from = parsed.from.to_a.first
+      parsed = MiniMime.new(mail.sub(HEADER_SEP, "").gsub("\n", "\r\n"))
+      from = parsed["from"]
 
       headers, body = mail.split(HEADER_SEP, 2)
       
