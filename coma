@@ -1,9 +1,12 @@
 #!/usr/bin/env ruby
 # -*- ruby -*-
+# coma - a console mail user agent
 
 require 'json'
 require 'fileutils'
 require 'tempfile'
+
+require 'minimime'
 
 $MAILDIR_PREFIX = "~/Mail"
 
@@ -378,6 +381,13 @@ def ref2idx(ctx, ref)
   end
 end
 
+def metamail(file)
+  text = File.read(file)
+  # Unix to Internet line conversion.
+  text.gsub!("\n", "\r\n")  unless text =~ /\r\n[\t ]*\r\n/m
+  MiniMime.new(text).render.gsub("\r\n", "\n")
+end
+
 def cmd_show(*argv)
   opts = parse argv
   opts['args'] = ["."]  if opts['args'].empty?
@@ -402,7 +412,7 @@ def cmd_show(*argv)
           # do nothing
         else
           puts "\C-l\n" + "#"*term_width if i > 0
-          puts `metamail -B #{file}`
+          puts metamail(file)
         end
         # XXX mark seen
       }
@@ -489,7 +499,7 @@ def cmd_mail(*argv)
       msg = ctx['seq'][ref2idx(ctx, ref)]
       opts['subject'] = ["Fwd: " + strip_re(msg[2])]
       from = msg[5]
-      original_mail = `metamail -B #{msg[0]}`
+      original_mail = metamail(msg[0])
     end
 
     Tempfile.open("coma-mail") { |tmp|
