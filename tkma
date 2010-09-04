@@ -78,9 +78,12 @@ tocbuttons = TkFrame.new(toc) {
   }
 }
 
+def sel
+  $mails.get($mails.curselection)[/\d+/]
+end
+
 $redisplay_opts = []
 def redisplay
-  sel = $mails.get($mails.curselection)[/\d+/]
   $mailcontent.state = 'normal'
   $mailcontent.value = `coma show #{sel} #{$redisplay_opts.join(" ")}`
   $mailcontent.state = 'disabled'
@@ -110,14 +113,18 @@ TkButton.new(mailbuttons) {
     padx 3
     pady 1
   text "repl"
-  command { xxx }
+  command { 
+    system "urxvt", "-e", "coma", "repl", sel
+  }
   pack "side" => "right"
 }
 TkButton.new(mailbuttons) {
     padx 3
     pady 1
   text "fwd"
-  command { xxx }
+  command { 
+    system "urxvt", "-e", "coma", "fwd", sel
+  }
   pack "side" => "right"
 }
 TkButton.new(mailbuttons) {
