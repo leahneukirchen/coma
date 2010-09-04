@@ -35,13 +35,14 @@ class MiniMime
     str.gsub!(/\?\=\=\?/, '?= =?')
 
     str.split(" ").map { |word|
-      if word =~ /=\?(.+)\?([BbQq])\?/m
-        word = $'.unpack({"B" => "m*", "Q" => "M*"}[$2.upcase]).first
-        Iconv.conv(encoding, $1, word)
+      if word =~ /=\?(.+)\?[Bb]\?(.*)\?=/m
+        Iconv.conv(encoding, $1, $2.unpack("m*").first)
+      elsif word =~ /=\?(.+)\?[Qq]\?(.*)\?=/m
+        Iconv.conv(encoding, $1, $2.unpack("M*").first).tr('_', ' ')
       else
         word
       end
-    }.join("")
+    }.join(" ")
   end
 
   def get(field)
