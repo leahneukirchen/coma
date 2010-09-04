@@ -1,0 +1,16 @@
+#!/usr/bin/env ruby
+# -*- ruby -*-
+# minimeta - tiny, non-interactive metamail clone
+
+require 'minimime'
+
+ARGV.each { |mail|
+  text = File.read(ARGV.first)
+
+  # Unix to Internet line conversion.
+  text.gsub!("\n", "\r\n")  unless text =~ /\r\n[\t ]*\r\n/m
+
+  msg = MiniMime.new(text)
+
+  puts msg.render
+}
