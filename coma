@@ -11,7 +11,7 @@ require 'minimime'
 
 $MAILDIR_PREFIX = "~/Mail"
 
-COMA_VERSION = "0.1"
+COMA_VERSION = "0.2"
 
 def folder2path(folder)
   if File.directory?(folder + "/cur")
