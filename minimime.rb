@@ -95,7 +95,7 @@ class MiniMime
     parse_ct(get("content-type"))
   end
 
-  def render_body
+  def render_body(encoding="utf-8")
     main, sub, opts = content_type
 
     case main
@@ -103,10 +103,13 @@ class MiniMime
       case sub
       when "plain"
         if opts["format"] == "flowed"
-          wrap_text body
+          output = wrap_text body
         else
-          body
+          output = body
         end
+
+        output = Iconv.conv(encoding, opts["charset"], output)  if opts["charset"]
+        output
       when "html"
         IO.popen("w3m -dump -T text/html", "w+") { |pipe|
           pipe.write body
