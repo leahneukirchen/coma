@@ -10,12 +10,17 @@ root = TkRoot.new {
   title "tkma"
 }
 
-root = panes = TkPanedWindow.new(root) {
+panes = TkPanedWindow.new(root) {
   orient "vertical"
 }
 
-folders = TkFrame.new(root) {
-  pack
+folders = TkText.new(panes) {
+  padx 0
+  pady 0
+  background panes.background
+  relief "flat"
+  pack :expand => true, :fill => :both
+  height 3
 }
 
 $rescan_opts = "-thread"
@@ -31,26 +36,34 @@ def textwidth
     TkFont.measure("TkFixedFont", "0") - 1
 end
 
-# XXX wrap?
-%w{+audvidsyn +lispmachines}.each { |folder|
-  TkButton.new(folders) {
-    text folder
-    padx 3
-    pady 1
-    command {
-      $folder = folder
-      rescan true
+`coma folders -list`.split("\n").sort.each { |folder|
+  TkTextWindow.new(folders, "end") {
+    self.window = TkButton.new {
+      text folder
+      padx 3
+      pady 1
+      command {
+        $folder = folder
+        rescan true
+      }
+      pack "side" => "left"
     }
-    pack "side" => "left"
   }
 }
+folders.state = 'disabled'
 
-toc = TkFrame.new(root) {
+class TkText
+  def textheight
+    number(tk_send_without_enc('count', '-ypixels', '1.0', 'end'))
+  end
+end
+
+toc = TkFrame.new(panes) {
   pack :expand => true, :fill => "x"
 }
 
 tocbuttons = TkFrame.new(toc) {
-  pack :expand => false, :fill => "both", :anchor => "ne"
+  pack :expand => false, :fill => :both
 }
 %w{all date from subject thread flagged unflagged replied unreplied seen unseen}.each { |btn|
   TkButton.new(tocbuttons) {
@@ -85,7 +98,7 @@ $mails = TkScrollbox.new(toc) {
   }
 }
 
-mail = TkFrame.new(root) {
+mail = TkFrame.new(panes) {
   pack :expand => true, :fill => "both"
 }
 
@@ -132,5 +145,18 @@ panes.add folders
 panes.add toc
 panes.add mail
 panes.pack(:expand => true, :fill => "both")
+
+Tk.update
+panes.paneconfigure(folders, :minsize => folders.textheight + 5)
+
+panes.paneconfigure(toc, :minsize => 20)
+panes.paneconfigure(mail, :minsize => 20)
+
+prevth = folders.textheight
+root.bind("Configure") {
+  break  if folders.textheight == prevth
+  panes.paneconfigure(folders, :minsize => folders.textheight + 5)
+  panes.sash_place(0, 0, 0)
+}
 
 Tk.mainloop
