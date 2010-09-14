@@ -201,90 +201,6 @@ def thread(seq, reverse)
 end
 
 def cmd_read(*argv)
-  opts = nil
-  with_context { |ctx|
-    argv = [ctx['folder'], '-unseen', '-thread']  if argv.empty?
-    opts = parse argv
-
-    opts['args'] = [ctx['folder']] if opts['args'].empty?
-
-    seq = []
-    
-    opts['args'].each { |folder|
-      begin
-        idx = ref2idx(ctx, folder)
-        seq.concat ctx['seq'].values_at(*[*idx].map { |x| x-1 })
-        abort "invalid references"  if seq.include?(nil)
-      rescue ArgumentError
-        if opts['seq']
-          seq = ctx['seq']
-          mid = seq[ctx['cur']][1]
-          p mid
-          seq.each { |m|
-            m[7] = 0  # reset depth
-          }
-        else
-          cache = File.open(folder2cache(folder)) { |f| Marshal.load(f) }
-          ctx['folder'] = folder  unless folder == "+"
-
-          cache.each { |k, v|
-            seq << [k, *v]
-          }
-        end
-      end
-    }
-
-    seq.delete_if { |file, *fields| fields[3] !~ /F/ }  if opts['flagged']
-    seq.delete_if { |file, *fields| fields[3] =~ /F/ }  if opts['unflagged']
-    seq.delete_if { |file, *fields| fields[3] !~ /S/ }  if opts['seen']
-    seq.delete_if { |file, *fields| fields[3] =~ /S/ }  if opts['unseen']
-    seq.delete_if { |file, *fields| fields[3] !~ /R/ }  if opts['replied']
-    seq.delete_if { |file, *fields| fields[3] =~ /R/ }  if opts['unreplied']
-    # -all
-    
-    if opts['subject']
-      seq = seq.sort_by { |file, *fields|
-        [opts['limit'] ? fields[2].to_i/(24*60*60*opts['limit'].first.to_i) : 0,
-         strip_re(fields[1]),
-         fields[2]]
-      }
-    elsif opts['date']
-      seq = seq.sort_by { |file, *fields| fields[2] }
-    elsif opts['from']
-      seq = seq.sort_by { |file, *fields|
-        [opts['limit'] ? fields[2].to_i/(24*60*60*opts['limit'].first.to_i) : 0,
-         fields[4],
-         fields[2]]
-      }
-    elsif opts['thread'] || true     # XXX make default configurable
-      seq = thread(seq, opts['reverse'])
-      opts.delete 'reverse'
-    end
-    
-    seq = seq[-Integer(opts['last'].first || 20)..-1]  if opts['last']
-    
-    seq.reverse!  if opts['reverse']
-    
-    ctx['seq'] = seq
-    ctx['cur'] = 1
-    
-    if opts['seq']       # restore cur on -seq.
-      seq.each_with_index { |m, i|
-        if m[1] == mid
-          ctx['cur'] = i
-          break
-        end
-      }
-    end
-  }
-
-  unless opts['q']
-    if opts['width']
-      cmd_scan("-width", *opts['width'])
-    else
-      cmd_scan
-    end
-  end
 end
 
 $now = Time.now
@@ -320,27 +236,101 @@ def nicesubj(s, size, depth)
   ("  "*depth + s)[0, size].to_s.ljust(size)
 end
 
-def cmd_scan(*argv) 
-  opts = parse argv
-  return cmd_read(*argv)  unless opts['args'].empty?
+def cmd_scan(*argv)
+  mid = nil
 
-  # XXX this can be improved.  implement a whole templating language? ugh.
+  argv = ["+", "-seq"]  if argv.empty?
+  opts = parse argv
+
   with_context { |ctx|
-    cur = ctx['cur']
-    ctx['seq'].each_with_index { |(_,_,s,d,fl,fr,_,depth), i|
+    seq = []
+    
+    opts['args'].each { |folder|
+      begin
+        idx = ref2idx(ctx, folder)
+        seq.concat ctx['seq'].values_at(*[*idx].map { |x| x-1 })
+        abort "invalid references"  if seq.include?(nil)
+      rescue ArgumentError
+        if opts['seq']
+          seq = ctx['seq']
+          mid = seq[ctx['cur']][1]
+          p mid
+          seq.each { |m|
+            m[7] = 0  # reset depth
+          }
+        else
+          cache = File.open(folder2cache(folder)) { |f| Marshal.load(f) }
+          ctx['folder'] = folder  unless folder == "+"
+
+          cache.each { |k, v|
+            seq << [k, *v]
+          }
+        end
+      end
+    }
+
+    seq.delete_if { |file, *fields| fields[3] !~ /F/ }  if opts['flagged']
+    seq.delete_if { |file, *fields| fields[3] =~ /F/ }  if opts['unflagged']
+    seq.delete_if { |file, *fields| fields[3] !~ /S/ }  if opts['seen']
+    seq.delete_if { |file, *fields| fields[3] =~ /S/ }  if opts['unseen']
+    seq.delete_if { |file, *fields| fields[3] !~ /R/ }  if opts['replied']
+    seq.delete_if { |file, *fields| fields[3] =~ /R/ }  if opts['unreplied']
+    
+    if opts['subject']
+      seq = seq.sort_by { |file, *fields|
+        [opts['limit'] ? fields[2].to_i/(24*60*60*opts['limit'].first.to_i) : 0,
+         strip_re(fields[1]),
+         fields[2]]
+      }
+    elsif opts['date']
+      seq = seq.sort_by { |file, *fields| fields[2] }
+    elsif opts['from']
+      seq = seq.sort_by { |file, *fields|
+        [opts['limit'] ? fields[2].to_i/(24*60*60*opts['limit'].first.to_i) : 0,
+         fields[4],
+         fields[2]]
+      }
+    elsif opts['thread'] || true     # XXX make default configurable
+      seq = thread(seq, opts['reverse'])
+      opts.delete 'reverse'
+    end
+    
+    seq = seq[-Integer(opts['last'].first || 20)..-1]  if opts['last']
+    
+    seq.reverse!  if opts['reverse']
+    
+    ctx['seq'] = seq
+    ctx['cur'] = 1
+    
+    if opts['seq']       # restore cur on -seq.
+      seq.each_with_index { |m, i|
+        if m[1] == mid
+          ctx['cur'] = i
+          break
+        end
+      }
+    end
+
+    unless opts['q']
+
+      # XXX this can be improved.  implement a whole templating language? ugh.
+      cur = ctx['cur']
+      ctx['seq'].each_with_index { |(_,_,s,d,fl,fr,_,depth), i|
 # XXX simple two-line format
 #      puts "%4d%s%s%s\n%-3s  %s  %s" % [i+1, (i+1 == cur ? "*" : " "),
 #                                      "  "*depth, s, fl,
 #                                      Time.at(d).strftime("%Y-%m-%d %H:%M"), fr]
-      width = opts['width'] ? opts['width'].first.to_i : term_width
-      # timely-like single-line format
-      puts "%4d%1s%1s%9s  %s  %s\n" % [i+1, (i+1 == cur ? "+" :
-                                             (fl !~ /S/ ? "." : " ")),
-                                       (fl =~ /R/ ? "-" : " "),
-                                       nicedate(Time.at(d)),
-                                       nicefrom(fr, 17),
-                                       nicesubj(s, width-37, depth)]
-    }
+        width = opts['width'] ? opts['width'].first.to_i : term_width
+        # timely-like single-line format
+        puts "%4d%1s%1s%9s  %s  %s\n" % [i+1, (i+1 == cur ? "+" :
+                                               (fl !~ /S/ ? "." : " ")),
+                                         (fl =~ /R/ ? "-" : " "),
+                                         nicedate(Time.at(d)),
+                                         nicefrom(fr, 17),
+                                         nicesubj(s, width-37, depth)]
+      }
+    end
+    
   }
 end
 

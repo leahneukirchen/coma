@@ -26,7 +26,7 @@ _coma(){
 }
 
 _coma_commands() {
-  cmd_list=(folders fwd inc mail next prev read repl scan show)
+  cmd_list=(folders fwd inc mail next prev repl scan show)
   _describe -t commands 'coma command' cmd_list
 }
 
@@ -81,12 +81,12 @@ _coma_cmd_scan(){
         -{,un}flagged -{,un}seen -{,un}replied \
         -subject -date -from -thread -all \
         -width: -last: -reverse \
-        '*:referece:_coma_ref'
+        '*:reference:_coma_ref_or_folder_or_dir'
 }
 
 _coma_cmd_show(){
     _arguments : -nopager -path -raw -idx -select \
-        '*:referece:_coma_ref'
+        '*:reference:_coma_ref'
 }
 
 _coma_aliases(){
@@ -101,6 +101,12 @@ _coma_ref(){
 
 _coma_folder(){
     compadd - $(coma folders -list)
+}
+
+_coma_ref_or_folder_or_dir(){
+    _alternative 'folders:folder:_coma_folder' \
+        'directories:directory:_directories' \
+        'references:reference:_coma_ref'
 }
 
 _coma_folder_or_dir(){
