@@ -70,6 +70,8 @@ def parse(argv)
   opts
 end
 
+Msg = Struct.new(:mid, :subj, :date, :flags, :from, :irt, :depth)
+
 def cmd_inc(*argv)
   opts = parse argv
 
@@ -91,10 +93,13 @@ def cmd_inc(*argv)
         email = MiniMime.new(File.read(File.join(fpath, file)).gsub("\n", "\r\n"))
         flags = file[/:2,([a-z]*)/i, 1].to_s.upcase
         
-        cache[File.join(fpath,file)] = [email["message-id"], email["subject"] || "(no subject)", Time.parse(email["date"]).to_f,
-                       flags, email["from"],
-                       email["in-reply-to"],
-                       0]
+        cache[File.join(fpath,file)] = Msg.new(email["message-id"],
+                                               email["subject"] || "(no subject)",
+                                               Time.parse(email["date"]).to_f,
+                                               flags,
+                                               email["from"],
+                                               email["in-reply-to"],
+                                               0)
         num += 1
         unread += 1  unless flags =~ /S/
       }
@@ -109,16 +114,16 @@ end
 # based on mhthread, mostly works
 # 24aug2010  +chris+
 def thread(seq, reverse)
-  mails = seq.map { |file, mid, subj, date, flags, from, irt, depth|
+  mails = seq.map { |file, msg|
     re_in_subj = false
-    sortsubj = subj.strip.gsub(/^(re\[\d+\][:;]\s*)+/i) {
+    sortsubj = msg.subj.strip.gsub(/^(re\[\d+\][:;]\s*)+/i) {
       re_in_subj = true
       ""
     }
 
-    {:mid => mid, :subj => sortsubj, :orig_subj => subj,
-      :re_in_subj => re_in_subj, :irt => irt, :date => date,
-      :from => from, :file => file, :flags => flags
+    {:mid => msg.mid, :subj => sortsubj, :orig_subj => msg.subj,
+      :re_in_subj => re_in_subj, :irt => msg.irt, :date => msg.date,
+      :from => msg.from, :file => file, :flags => msg.flags
     }
   }
 
@@ -183,7 +188,7 @@ def thread(seq, reverse)
 
   sorted = []
   rec = lambda { |level, mid, msg|
-    sorted << (msg.values_at(:file, :mid, :orig_subj, :date, :flags, :from, :irt) << level)
+    sorted << [msg[:file], Msg.new(*msg.values_at(:mid, :orig_subj, :date, :flags, :from, :irt) << level)]
     tree[mid].keys.sort_by { |a| mid2msg[a][:date] }.each { |kid|
       rec[level+1, kid, tree[mid][kid]]
     }
@@ -253,17 +258,16 @@ def cmd_scan(*argv)
       rescue ArgumentError
         if opts['seq']
           seq = ctx['seq']
-          mid = seq[ctx['cur']][1]
-          p mid
-          seq.each { |m|
-            m[7] = 0  # reset depth
+          mid = seq[ctx['cur']][1].mid
+          seq.each { |file,msg|
+            msg.depth = 0  # reset depth
           }
         else
           cache = File.open(folder2cache(folder)) { |f| Marshal.load(f) }
           ctx['folder'] = folder  unless folder == "+"
 
           cache.each { |k, v|
-            seq << [k, *v]
+            seq << [k, v]
           }
         end
       end
@@ -277,18 +281,18 @@ def cmd_scan(*argv)
     seq.delete_if { |file, *fields| fields[3] =~ /R/ }  if opts['unreplied']
     
     if opts['subject']
-      seq = seq.sort_by { |file, *fields|
-        [opts['limit'] ? fields[2].to_i/(24*60*60*opts['limit'].first.to_i) : 0,
-         strip_re(fields[1]),
-         fields[2]]
+      seq = seq.sort_by { |file, msg|
+        [opts['limit'] ? msg.date.to_i/(24*60*60*opts['limit'].first.to_i) : 0,
+         strip_re(msg.subj),
+         msg.date]
       }
     elsif opts['date']
-      seq = seq.sort_by { |file, *fields| fields[2] }
+      seq = seq.sort_by { |file, msg| msg.date }
     elsif opts['from']
-      seq = seq.sort_by { |file, *fields|
-        [opts['limit'] ? fields[2].to_i/(24*60*60*opts['limit'].first.to_i) : 0,
-         fields[4],
-         fields[2]]
+      seq = seq.sort_by { |file, *msg|
+        [opts['limit'] ? msg.date.to_i/(24*60*60*opts['limit'].first.to_i) : 0,
+         msg.from,
+         msg.date]
       }
     elsif opts['thread'] || true     # XXX make default configurable
       seq = thread(seq, opts['reverse'])
@@ -303,8 +307,8 @@ def cmd_scan(*argv)
     ctx['cur'] = 1
     
     if opts['seq']       # restore cur on -seq.
-      seq.each_with_index { |m, i|
-        if m[1] == mid
+      seq.each_with_index { |(file,msg), i|
+        if msg.mid == mid
           ctx['cur'] = i
           break
         end
@@ -315,7 +319,7 @@ def cmd_scan(*argv)
 
       # XXX this can be improved.  implement a whole templating language? ugh.
       cur = ctx['cur']
-      ctx['seq'].each_with_index { |(_,_,s,d,fl,fr,_,depth), i|
+      ctx['seq'].each_with_index { |(_, msg), i|
 # XXX simple two-line format
 #      puts "%4d%s%s%s\n%-3s  %s  %s" % [i+1, (i+1 == cur ? "*" : " "),
 #                                      "  "*depth, s, fl,
@@ -323,11 +327,11 @@ def cmd_scan(*argv)
         width = opts['width'] ? opts['width'].first.to_i : term_width
         # timely-like single-line format
         puts "%4d%1s%1s%9s  %s  %s\n" % [i+1, (i+1 == cur ? "+" :
-                                               (fl !~ /S/ ? "." : " ")),
-                                         (fl =~ /R/ ? "-" : " "),
-                                         nicedate(Time.at(d)),
-                                         nicefrom(fr, 17),
-                                         nicesubj(s, width-37, depth)]
+                                               (msg.flags !~ /S/ ? "." : " ")),
+                                         (msg.flags =~ /R/ ? "-" : " "),
+                                         nicedate(Time.at(msg.date)),
+                                         nicefrom(msg.from, 17),
+                                         nicesubj(msg.subj, width-37, msg.depth)]
       }
     end
     
@@ -364,11 +368,11 @@ def ref2idx(ctx, ref)
     1..ctx['seq'].size
   when "thread"
     start = ctx['cur']
-    while ctx['seq'][start-1][7] > 0 && start >= 1
+    while ctx['seq'][start-1].depth > 0 && start >= 1
       start -= 1
     end
     stop = start+1
-    while ctx['seq'][stop-1][7] != 0 && stop < ctx['seq'].size
+    while ctx['seq'][stop-1].depth != 0 && stop < ctx['seq'].size
       stop += 1
     end
     start..stop-1
@@ -477,23 +481,23 @@ def cmd_mail(*argv)
   with_context { |ctx|
     if opts['repl']
       ref = opts['repl'].first || "."
-      msg = ctx['seq'][ref2idx(ctx, ref) - 1]
+      file, msg = ctx['seq'][ref2idx(ctx, ref) - 1]
 
-      re = MiniMime.new(File.read(msg[0]).gsub("\n", "\r\n"))
+      re = MiniMime.new(File.read(file).gsub("\n", "\r\n"))
       if re['reply-to'] && !opts['noreplyto']
         to = re['reply-to'].to_s
       else
-        to = msg[5]
+        to = msg.irt
       end
       opts['cc'] ||= [re['cc']]  unless opts['noreplyall'] || !re['cc']
-      opts['subject'] = ["Re: " + strip_re(msg[2])]
-      irt = msg[1]
+      opts['subject'] = ["Re: " + strip_re(msg.subj)]
+      irt = msg.mid
     elsif opts['fwd']
       ref = opts['fwd'].first || "."
-      msg = ctx['seq'][ref2idx(ctx, ref)]
-      opts['subject'] = ["Fwd: " + strip_re(msg[2])]
-      from = msg[5]
-      original_mail = metamail(msg[0])
+      file, msg = ctx['seq'][ref2idx(ctx, ref)]
+      opts['subject'] = ["Fwd: " + strip_re(msg.subj)]
+      from = msg.from
+      original_mail = metamail(file)
     end
 
     Tempfile.open("coma-mail") { |tmp|
