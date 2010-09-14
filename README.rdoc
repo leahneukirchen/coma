@@ -72,7 +72,7 @@ XXX TODO mostly
 
 == Dependencies
 
-The json gem.  Only tested with Ruby 1.8.
+Just Ruby 1.8.
 
 External tools: file(1), w3m(1) for HTML mail display, identify(1) for
 images, mhbuild(1) to send MIME mail.

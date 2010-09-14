@@ -5,11 +5,7 @@
 export LINES COLUMNS
 
 coma() {
-    # This is a lot faster than rubygems.
-    ruby \
-        -I${${(n)$(echo /opt/ruby1.8/lib/ruby/gems/1.8/gems/json-*/lib)}[-1]} \
-        -I${${(n)$(echo /opt/ruby1.8/lib/ruby/gems/1.8/gems/tmail-*/lib)}[-1]} \
-        ~/prj/coma/coma "$@"
+    ruby -I ~/prj/coma ~/prj/coma/coma "$@"
 }
 alias ,="coma"
 alias s="coma show"

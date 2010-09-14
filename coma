@@ -2,7 +2,6 @@
 # -*- ruby -*-
 # coma - a console mail user agent
 
-require 'json'
 require 'fileutils'
 require 'tempfile'
 require 'time'
@@ -38,9 +37,10 @@ def with_context
     FileUtils.mkdir_p(File.expand_path("~/.config/coma"))
   end
   
-  ctx = File.open(contextfile) { |f| JSON.load(f) } rescue {}
-  yield ctx
-  File.open(contextfile, "w") { |f| f << JSON.pretty_generate(ctx) }
+  ctx = File.open(contextfile) { |f| Marshal.load(f) } rescue {}
+  r = yield ctx
+  File.open(contextfile, "w") { |f| Marshal.dump(ctx, f) }
+  r
 end
 
 def contextfile
@@ -92,8 +92,8 @@ def cmd_inc(*argv)
         unread += 1  unless flags =~ /S/
       }
       
-      File.open(folder2cache(folder), "w") { |f| f << JSON.pretty_generate(cache) }
-      
+      File.open(folder2cache(folder), "w") { |f| Marshal.dump(cache, f) }
+
       puts "%-20s %5d messages %5d unread %5d new" % [folder, num, unread, new]  unless opts['q']
     }
   }
@@ -217,8 +217,8 @@ def cmd_read(*argv)
             m[7] = 0  # reset depth
           }
         else
-          cache = File.open(folder2cache(folder)) { |f| JSON.load(f) }
-          ctx['folder'] = folder
+          cache = File.open(folder2cache(folder)) { |f| Marshal.load(f) }
+          ctx['folder'] = folder  unless folder == "+"
 
           cache.each { |k, v|
             seq << [k, *v]
