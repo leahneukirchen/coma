@@ -78,15 +78,20 @@ def cmd_inc(*argv)
       ctx['folder'] = folder
       cache = {}
       num = unread = new = 0
-      Dir[folder2path(folder) + "/../new/*"].each { |file|
-        File.rename file, "#{folder2path(folder)}/#{File.basename(file)}:2,"
+
+      fpath = folder2path(folder)
+
+      Dir.foreach(File.join(fpath, "/../new/")) { |file|
+        next  if file =~ /\A\./
+        File.rename file, "#{fpath}/#{File.basename(file)}:2,"
         new += 1
       }
-      Dir[folder2path(folder) + "/*"].each { |file|
-        email = MiniMime.new(File.read(file).gsub("\n", "\r\n"))
+      Dir.foreach(fpath) { |file|
+        next  if file =~ /\A\./
+        email = MiniMime.new(File.read(File.join(fpath, file)).gsub("\n", "\r\n"))
         flags = file[/:2,([a-z]*)/i, 1].to_s.upcase
         
-        cache[file] = [email["message-id"], email["subject"] || "(no subject)", Time.parse(email["date"]).to_f,
+        cache[File.join(fpath,file)] = [email["message-id"], email["subject"] || "(no subject)", Time.parse(email["date"]).to_f,
                        flags, email["from"],
                        email["in-reply-to"],
                        0]
