@@ -21,8 +21,10 @@ def folder2path(folder)
     case folder
     when /\A\+([\/.~].*)/
       File.expand_path($1) + "/cur"
-    when /\A\+(.*)/
+    when /\A\+(.+)/
       File.expand_path($MAILDIR_PREFIX) + "/" + $1 + "/cur"
+    when "+"  # current folder
+      folder2path(with_context { |ctx| ctx['folder'] })
     end
   end
 end
