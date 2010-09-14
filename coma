@@ -258,7 +258,7 @@ def cmd_scan(*argv)
       rescue ArgumentError
         if opts['seq']
           seq = ctx['seq']
-          mid = seq[ctx['cur']][1].mid
+          mid = seq[ctx['cur']][1].mid  rescue nil
           seq.each { |file,msg|
             msg.depth = 0  # reset depth
           }
@@ -368,11 +368,11 @@ def ref2idx(ctx, ref)
     1..ctx['seq'].size
   when "thread"
     start = ctx['cur']
-    while ctx['seq'][start-1].depth > 0 && start >= 1
+    while ctx['seq'][start-1][1].depth > 0 && start >= 1
       start -= 1
     end
     stop = start+1
-    while ctx['seq'][stop-1].depth != 0 && stop < ctx['seq'].size
+    while ctx['seq'][stop-1][1].depth != 0 && stop < ctx['seq'].size
       stop += 1
     end
     start..stop-1
@@ -393,29 +393,28 @@ def cmd_show(*argv)
   opts['args'] = ["."]  if opts['args'].empty?
 
   if $stdout.tty? && !opts['nopager']
-    $stdout = IO.popen("less -FRWX", "w")
+    $stdout = IO.popen("less -FRWXe", "w")
     at_exit { $stdout.close }
   end
 
   with_context { |ctx|
-    opts['args'].each_with_index { |ref, i|
-      [*ref2idx(ctx, ref)].each { |idx|
-        ctx['cur'] = idx
-        file = ctx['seq'][ctx['cur'] - 1][0]
-        if opts['path']
-          puts file
-        elsif opts['raw']
-          puts File.read(file)
-        elsif opts['idx']
-          puts idx
-        elsif opts['select']
-          # do nothing
-        else
-          puts "\C-l\n" + "#"*term_width if i > 0
-          puts metamail(file)
-        end
-        # XXX mark seen
-      }
+    opts['args'].map { |ref| [*ref2idx(ctx, ref)] }.
+    flatten.each_with_index { |idx, i|
+      ctx['cur'] = idx
+      file = ctx['seq'][ctx['cur'] - 1][0]
+      if opts['path']
+        puts file
+      elsif opts['raw']
+        puts File.read(file)
+      elsif opts['idx'] 
+        puts idx 
+      elsif opts['select']
+        # do nothing
+      else
+        puts "\C-l\n" + "#"*term_width  if i > 0
+        puts metamail(file)
+      end
+      # XXX mark seen
     }
   }
 end

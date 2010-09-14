@@ -12,6 +12,16 @@ alias s="coma show"
 alias n="coma next"
 alias p="coma prev"
 
+_coma_n() {
+  zle && zle -I                 # force redrawing of prompt
+  clear
+  coma next
+}
+
+zle -N _coma_n
+bindkey "^F" _coma_n
+
+
 # Coma completion.
 
 _coma(){  
