@@ -241,85 +241,93 @@ def nicesubj(s, size, depth)
   ("  "*depth + s)[0, size].to_s.ljust(size)
 end
 
-def cmd_scan(*argv)
-  mid = nil
+def select(ctx, opts)
+  explicit_folder = false
+  seq = ctx['seq']
+  mid = seq[ctx['cur']][1].mid  rescue nil
 
-  argv = ["+", "-seq"]  if argv.empty?
+  if opts['subject'] || opts['date'] || opts['from']
+    seq.each { |file,msg|
+      msg.depth = 0  # reset depth
+    }
+  end
+  
+  opts['args'].each { |folder|
+    begin
+      idx = ref2idx(ctx, folder)
+      seq = seq.values_at(*[*idx].map { |x| x-1 })
+      abort "invalid references"  if seq.include?(nil)
+    rescue ArgumentError
+      cache = File.open(folder2cache(folder)) { |f| Marshal.load(f) }
+      unless folder == "+"
+        unless explicit_folder
+          seq.clear
+        end
+        
+        ctx['folder'] = folder  
+        explicit_folder = true
+      end
+      
+      cache.each { |k, v|
+        seq << [k, v]
+      }
+    end
+  }
+  
+  seq.delete_if { |file, *fields| fields[3] !~ /F/ }  if opts['flagged']
+  seq.delete_if { |file, *fields| fields[3] =~ /F/ }  if opts['unflagged']
+  seq.delete_if { |file, *fields| fields[3] !~ /S/ }  if opts['seen']
+  seq.delete_if { |file, *fields| fields[3] =~ /S/ }  if opts['unseen']
+  seq.delete_if { |file, *fields| fields[3] !~ /R/ }  if opts['replied']
+  seq.delete_if { |file, *fields| fields[3] =~ /R/ }  if opts['unreplied']
+  
+  if opts['subject']
+    seq = seq.sort_by { |file, msg|
+      [opts['limit'] ? msg.date.to_i/(24*60*60*opts['limit'].first.to_i) : 0,
+       strip_re(msg.subj),
+       msg.date]
+    }
+  elsif opts['date']
+    seq = seq.sort_by { |file, msg| msg.date }
+  elsif opts['from']
+    seq = seq.sort_by { |file, msg|
+      [opts['limit'] ? msg.date.to_i/(24*60*60*opts['limit'].first.to_i) : 0,
+       msg.from,
+       msg.date]
+    }
+  elsif opts['thread']
+    seq = thread(seq, opts['reverse'])
+    opts.delete 'reverse'
+  end
+  
+  seq = seq[-Integer(opts['last'].first || 20)..-1]  if opts['last']
+  
+  seq.reverse!  if opts['reverse']
+  
+  unless explicit_folder       # restore cur
+    seq.each_with_index { |(file,msg), i|
+      if msg.mid == mid
+        return [seq, i]
+      end
+    }
+  end
+
+  [seq, 1]
+end
+
+def cmd_read(*argv)
+  cmd_scan(*(argv + ["-save", "-thread"]))
+end
+
+def cmd_scan(*argv)
   opts = parse argv
 
   with_context { |ctx|
-    seq = []
-    
-    opts['args'].each { |folder|
-      begin
-        idx = ref2idx(ctx, folder)
-        seq.concat ctx['seq'].values_at(*[*idx].map { |x| x-1 })
-        abort "invalid references"  if seq.include?(nil)
-      rescue ArgumentError
-        if opts['seq']
-          seq = ctx['seq']
-          mid = seq[ctx['cur']][1].mid  rescue nil
-          seq.each { |file,msg|
-            msg.depth = 0  # reset depth
-          }
-        else
-          cache = File.open(folder2cache(folder)) { |f| Marshal.load(f) }
-          ctx['folder'] = folder  unless folder == "+"
+    seq, cur = select(ctx, opts)
 
-          cache.each { |k, v|
-            seq << [k, v]
-          }
-        end
-      end
-    }
-
-    seq.delete_if { |file, *fields| fields[3] !~ /F/ }  if opts['flagged']
-    seq.delete_if { |file, *fields| fields[3] =~ /F/ }  if opts['unflagged']
-    seq.delete_if { |file, *fields| fields[3] !~ /S/ }  if opts['seen']
-    seq.delete_if { |file, *fields| fields[3] =~ /S/ }  if opts['unseen']
-    seq.delete_if { |file, *fields| fields[3] !~ /R/ }  if opts['replied']
-    seq.delete_if { |file, *fields| fields[3] =~ /R/ }  if opts['unreplied']
-    
-    if opts['subject']
-      seq = seq.sort_by { |file, msg|
-        [opts['limit'] ? msg.date.to_i/(24*60*60*opts['limit'].first.to_i) : 0,
-         strip_re(msg.subj),
-         msg.date]
-      }
-    elsif opts['date']
-      seq = seq.sort_by { |file, msg| msg.date }
-    elsif opts['from']
-      seq = seq.sort_by { |file, *msg|
-        [opts['limit'] ? msg.date.to_i/(24*60*60*opts['limit'].first.to_i) : 0,
-         msg.from,
-         msg.date]
-      }
-    elsif opts['thread'] || true     # XXX make default configurable
-      seq = thread(seq, opts['reverse'])
-      opts.delete 'reverse'
-    end
-    
-    seq = seq[-Integer(opts['last'].first || 20)..-1]  if opts['last']
-    
-    seq.reverse!  if opts['reverse']
-    
-    ctx['seq'] = seq
-    ctx['cur'] = 1
-    
-    if opts['seq']       # restore cur on -seq.
-      seq.each_with_index { |(file,msg), i|
-        if msg.mid == mid
-          ctx['cur'] = i
-          break
-        end
-      }
-    end
-
-    unless opts['q']
-
+    unless opts["q"]
       # XXX this can be improved.  implement a whole templating language? ugh.
-      cur = ctx['cur']
-      ctx['seq'].each_with_index { |(_, msg), i|
+      seq.each_with_index { |(_, msg), i|
 # XXX simple two-line format
 #      puts "%4d%s%s%s\n%-3s  %s  %s" % [i+1, (i+1 == cur ? "*" : " "),
 #                                      "  "*depth, s, fl,
@@ -334,7 +342,11 @@ def cmd_scan(*argv)
                                          nicesubj(msg.subj, width-37, msg.depth)]
       }
     end
-    
+
+    if opts["save"]
+      ctx['seq'] = seq
+      ctx['cur'] = cur 
+    end
   }
 end
 
