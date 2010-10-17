@@ -70,7 +70,16 @@ def parse(argv)
   opts
 end
 
-Msg = Struct.new(:mid, :subj, :date, :flags, :from, :irt, :depth)
+Msg = Struct.new(:file, :mid, :subj, :date, :from, :irt, :depth)
+class Msg
+  def flags
+    file[/:2,([a-z]*)/i, 1].to_s.upcase
+  end
+
+  def flags=(newflags)
+    self.file = file.gsub(/:2,([a-z]*)/i, ":2,#{newflags}")
+  end
+end
 
 def cmd_inc(*argv)
   opts = parse argv
@@ -91,17 +100,16 @@ def cmd_inc(*argv)
       Dir.foreach(fpath) { |file|
         next  if file =~ /\A\./
         email = MiniMime.new(File.read(File.join(fpath, file)).gsub("\n", "\r\n"))
-        flags = file[/:2,([a-z]*)/i, 1].to_s.upcase
-        
-        cache[File.join(fpath,file)] = Msg.new(email["message-id"],
-                                               email["subject"] || "(no subject)",
-                                               Time.parse(email["date"]).to_f,
-                                               flags,
-                                               email["from"],
-                                               email["in-reply-to"],
-                                               0)
+        msg = Msg.new(file,
+                      email["message-id"],
+                      email["subject"] || "(no subject)",
+                      Time.parse(email["date"]).to_f,
+                      email["from"],
+                      email["in-reply-to"],
+                      0)
+        cache[File.join(fpath,file)] = msg
         num += 1
-        unread += 1  unless flags =~ /S/
+        unread += 1  unless msg.flags =~ /S/
       }
       
       File.open(folder2cache(folder), "w") { |f| Marshal.dump(cache, f) }
@@ -188,7 +196,7 @@ def thread(seq, reverse)
 
   sorted = []
   rec = lambda { |level, mid, msg|
-    sorted << [msg[:file], Msg.new(*msg.values_at(:mid, :orig_subj, :date, :flags, :from, :irt) << level)]
+    sorted << [msg[:file], Msg.new(*msg.values_at(:file, :mid, :orig_subj, :date, :from, :irt) << level)]
     tree[mid].keys.sort_by { |a| mid2msg[a][:date] }.each { |kid|
       rec[level+1, kid, tree[mid][kid]]
     }
