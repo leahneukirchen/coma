@@ -269,7 +269,7 @@ def select(ctx, opts)
       cache = File.open(folder2cache(folder)) { |f| Marshal.load(f) }
       unless folder == "+"
         unless explicit_folder
-          seq.clear
+          seq = []
         end
         
         ctx['folder'] = folder  
@@ -288,7 +288,7 @@ def select(ctx, opts)
   seq.delete_if { |file, *fields| fields[3] =~ /S/ }  if opts['unseen']
   seq.delete_if { |file, *fields| fields[3] !~ /R/ }  if opts['replied']
   seq.delete_if { |file, *fields| fields[3] =~ /R/ }  if opts['unreplied']
-  
+
   if opts['subject']
     seq = seq.sort_by { |file, msg|
       [opts['limit'] ? msg.date.to_i/(24*60*60*opts['limit'].first.to_i) : 0,
@@ -417,6 +417,9 @@ def cmd_show(*argv)
     at_exit { $stdout.close }
   end
 
+  keep = opts['keep'] || opts['path'] || opts['raw'] || opts['idx'] || opts['select']
+  seen = []
+
   with_context { |ctx|
     opts['args'].map { |ref| [*ref2idx(ctx, ref)] }.
     flatten.each_with_index { |idx, i|
@@ -434,9 +437,11 @@ def cmd_show(*argv)
         puts "\C-l\n" + "#"*term_width  if i > 0
         puts metamail(file)
       end
-      # XXX mark seen
+      seen << idx.to_s
     }
   }
+
+  cmd_mark(*(seen << "-seen"))  unless keep
 end
 
 def cmd_next
