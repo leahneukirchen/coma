@@ -267,11 +267,8 @@ def select(ctx, opts)
       abort "invalid references"  if seq.include?(nil)
     rescue ArgumentError
       cache = File.open(folder2cache(folder)) { |f| Marshal.load(f) }
+      seq = []
       unless folder == "+"
-        unless explicit_folder
-          seq = []
-        end
-        
         ctx['folder'] = folder  
         explicit_folder = true
       end
