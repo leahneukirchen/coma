@@ -588,12 +588,46 @@ def cmd_mail(*argv)
   }
 end
 
-def cmd_repl(*args)
-  cmd_mail("-repl", *args)
+def cmd_repl(*argv)
+  cmd_mail("-repl", *argv)
 end
 
-def cmd_fwd(*args)
-  cmd_mail("-fwd", *args)
+def cmd_fwd(*argv)
+  cmd_mail("-fwd", *argv)
+end
+
+def cmd_mark(*argv)
+  opts = parse argv
+
+  cache = File.open(folder2cache("+")) { |f| Marshal.load(f) }
+
+  with_context { |ctx|
+    opts['args'].map { |ref| [*ref2idx(ctx, ref)] }.
+    flatten.each_with_index { |idx, i|
+      file = ctx['seq'][idx - 1][0].dup
+      msg = ctx['seq'][idx - 1][1]
+
+      flags = msg.flags.split(//)
+      
+      flags |= ["F"]  if opts['flagged']
+      flags -= ["F"]  if opts['unflagged']
+      flags |= ["S"]  if opts['seen']
+      flags -= ["S"]  if opts['unseen']
+      flags |= ["R"]  if opts['replied']
+      flags -= ["R"]  if opts['unreplied']
+
+      msg.flags = flags.sort.join
+
+      next  if file == msg.file
+
+      File.rename file, msg.file
+      cache[msg.file] = msg
+      cache.delete file
+      ctx['seq'][idx - 1][0] = msg.file
+    }
+  }  
+
+  File.open(folder2cache("+"), "w") { |f| Marshal.dump(cache, f) }
 end
 
 command = ARGV.first || 'usage'
