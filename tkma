@@ -87,6 +87,7 @@ def redisplay
   $mailcontent.state = 'normal'
   $mailcontent.value = `coma show #{sel} #{$redisplay_opts.join(" ")}`
   $mailcontent.state = 'disabled'
+  rescan
 end
 
 $mails = TkScrollbox.new(toc) {
