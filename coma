@@ -591,6 +591,10 @@ def cmd_mail(*argv)
       end
     }
   }
+
+  if opts['repl'] && !opts['keep']
+    cmd_mark(opts['repl'].first || ".", "-replied")
+  end
 end
 
 def cmd_repl(*argv)
