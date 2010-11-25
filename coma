@@ -252,7 +252,7 @@ end
 def select(ctx, opts)
   explicit_folder = false
   seq = ctx['seq']
-  mid = seq[ctx['cur']][1].mid  rescue nil
+  mid = seq[ctx['cur']-1][1].mid  rescue nil
 
   if opts['subject'] || opts['date'] || opts['from']
     seq.each { |file,msg|
@@ -316,7 +316,7 @@ def select(ctx, opts)
   unless explicit_folder       # restore cur
     seq.each_with_index { |(file,msg), i|
       if msg.mid == mid
-        return [seq, i]
+        return [seq, msg.idx]
       end
     }
   end
@@ -357,7 +357,7 @@ def cmd_scan(*argv)
         # timely-like single-line format
         if msg.idx
           idx = msg.idx+1
-          flag = (idx == cur ? "+" : nil)
+          flag = (msg.idx == cur ? "+" : nil)
         else
           idx = ''
           flag = nil
