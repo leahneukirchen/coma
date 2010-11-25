@@ -38,7 +38,7 @@ def with_context
   unless File.directory?(File.expand_path("~/.config/coma"))
     FileUtils.mkdir_p(File.expand_path("~/.config/coma"))
   end
-  
+
   ctx = File.open(contextfile) { |f| Marshal.load(f) } rescue {}
   r = yield ctx
   File.open(contextfile, "w") { |f| Marshal.dump(ctx, f) }
@@ -111,7 +111,7 @@ def cmd_inc(*argv)
         num += 1
         unread += 1  unless msg.flags =~ /S/
       }
-      
+
       File.open(folder2cache(folder), "w") { |f| Marshal.dump(cache, f) }
 
       puts "%-20s %5d messages %5d unread %5d new" % [folder, num, unread, new]  unless opts['q']
@@ -147,14 +147,14 @@ def thread(seq, reverse)
     irt = msg[:irt]
 
     mid2msg[mid] = msg
-    
+
     tree[mid] ||= {}
-    
+
     unless irt
       toplevel[mid] = msg
       subjtop[msg[:subj]] = msg  unless msg[:re_in_subj]
       (subjsets[msg[:subj]] ||= []) << msg
-      
+
       if !subjearliest[msg[:subj]] || subjearliest[msg[:subj]] > msg[:date]
         subjearliest[msg[:subj]] = msg[:date]
       end
@@ -166,16 +166,16 @@ def thread(seq, reverse)
 
   tree.each { |mid, _|
     next  if mid2msg[mid]
-    
+
     tree[mid].each { |kid, _|
       msg = mid2msg[kid]
       mid = msg[:mid]
       next  if toplevel[mid]
-      
+
       toplevel[mid] = msg
       subjtop[msg[:subj]] = msg  unless msg[:re_in_subj]
       (subjsets[msg[:subj]] ||= []) << msg
-      
+
       if !subjearliest[msg[:subj]] || subjearliest[msg[:subj]] > msg[:date]
         subjearliest[msg[:subj]] = msg[:date]
       end
@@ -185,7 +185,7 @@ def thread(seq, reverse)
   subjsets.each { |subj, _|
     parent = subjtop[subj]
     next  unless parent
-    
+
     subjsets[subj].each { |msg|
       if msg[:re_in_subj]
         tree[parent[mid]][msg[:mid]] = msg
@@ -259,7 +259,7 @@ def select(ctx, opts)
       msg.depth = 0  # reset depth
     }
   end
-  
+
   opts['args'].each { |folder|
     begin
       idx = ref2idx(ctx, folder)
@@ -269,16 +269,16 @@ def select(ctx, opts)
       cache = File.open(folder2cache(folder)) { |f| Marshal.load(f) }
       seq = []
       unless folder == "+"
-        ctx['folder'] = folder  
+        ctx['folder'] = folder
         explicit_folder = true
       end
-      
+
       cache.each { |k, v|
         seq << [k, v]
       }
     end
   }
-  
+
   seq.delete_if { |file, msg| msg.flags !~ /F/ }  if opts['flagged']
   seq.delete_if { |file, msg| msg.flags =~ /F/ }  if opts['unflagged']
   seq.delete_if { |file, msg| msg.flags !~ /S/ }  if opts['seen']
@@ -304,11 +304,11 @@ def select(ctx, opts)
     seq = thread(seq, opts['reverse'])
     opts.delete 'reverse'
   end
-  
+
   seq = seq[-Integer(opts['last'].first || 20)..-1]  if opts['last']
-  
+
   seq.reverse!  if opts['reverse']
-  
+
   unless explicit_folder       # restore cur
     seq.each_with_index { |(file,msg), i|
       if msg.mid == mid
@@ -339,7 +339,7 @@ def cmd_scan(*argv)
         msg.idx = i
       }
       ctx['seq'] = seq
-      ctx['cur'] = cur 
+      ctx['cur'] = cur
     end
 
     unless opts["q"]
@@ -372,7 +372,7 @@ def ref2idx(ctx, ref)
   when "cur", "."
     ref = "+0"
   end
-      
+
   case ref
   when /.-./
     a, b = ref.split("-", 2)
@@ -434,8 +434,8 @@ def cmd_show(*argv)
         puts file
       elsif opts['raw']
         puts File.read(file)
-      elsif opts['idx'] 
-        puts idx 
+      elsif opts['idx']
+        puts idx
       elsif opts['select']
         # do nothing
       else
@@ -506,7 +506,7 @@ HEADER_SEP = "--text follows this line--"
 def cmd_mail(*argv)
   opts = parse argv
   to = (opts['args'] + opts['to'].to_a).join(", ")
-  
+
   with_context { |ctx|
     if opts['repl']
       ref = opts['repl'].first || "."
@@ -556,20 +556,20 @@ def cmd_mail(*argv)
         # nevermind
       end
       tmp.close
-      
+
       original = File.read(tmp.path)
       system(ENV["VISUAL"] || ENV["EDITOR"] || "vi", tmp.path)
       mail = File.read(tmp.path)
-      
+
       if mail.empty? || mail == original || !mail.index(HEADER_SEP)
         abort "mail canceled"
       end
-      
+
       parsed = MiniMime.new(mail.sub(HEADER_SEP, "").gsub("\n", "\r\n"))
       from = parsed["from"]
 
       headers, body = mail.split(HEADER_SEP, 2)
-      
+
       headers << "Message-Id: #{generate_mid(from)}\n"
       headers << "X-Mailer: coma/#{COMA_VERSION}\n"
 
@@ -622,7 +622,7 @@ def cmd_mark(*argv)
       msg = ctx['seq'][idx - 1][1]
 
       flags = msg.flags.split(//)
-      
+
       flags |= ["F"]  if opts['flagged']
       flags -= ["F"]  if opts['unflagged']
       flags |= ["S"]  if opts['seen']
@@ -639,7 +639,7 @@ def cmd_mark(*argv)
       cache.delete file
       ctx['seq'][idx - 1][0] = msg.file
     }
-  }  
+  }
 
   File.open(folder2cache("+"), "w") { |f| Marshal.dump(cache, f) }
 end
