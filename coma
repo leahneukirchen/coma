@@ -70,7 +70,7 @@ def parse(argv)
   opts
 end
 
-Msg = Struct.new(:file, :mid, :subj, :date, :from, :irt, :depth)
+Msg = Struct.new(:file, :mid, :subj, :date, :from, :irt, :idx, :depth)
 class Msg
   def flags
     file[/:2,([a-z]*)/i, 1].to_s.upcase
@@ -106,7 +106,7 @@ def cmd_inc(*argv)
                       Time.parse(email["date"]).to_f,
                       email["from"],
                       email["in-reply-to"],
-                      0)
+                      0, 0)
         cache[File.join(fpath,file)] = msg
         num += 1
         unread += 1  unless msg.flags =~ /S/
@@ -131,7 +131,7 @@ def thread(seq, reverse)
 
     {:mid => msg.mid, :subj => sortsubj, :orig_subj => msg.subj,
       :re_in_subj => re_in_subj, :irt => msg.irt, :date => msg.date,
-      :from => msg.from, :file => file, :flags => msg.flags
+      :from => msg.from, :file => file, :flags => msg.flags, :idx => msg.idx
     }
   }
 
@@ -196,7 +196,7 @@ def thread(seq, reverse)
 
   sorted = []
   rec = lambda { |level, mid, msg|
-    sorted << [msg[:file], Msg.new(*msg.values_at(:file, :mid, :orig_subj, :date, :from, :irt) << level)]
+    sorted << [msg[:file], Msg.new(*msg.values_at(:file, :mid, :orig_subj, :date, :from, :irt, :idx) << level)]
     tree[mid].keys.sort_by { |a| mid2msg[a][:date] }.each { |kid|
       rec[level+1, kid, tree[mid][kid]]
     }
@@ -334,27 +334,31 @@ def cmd_scan(*argv)
   with_context { |ctx|
     seq, cur = select(ctx, opts)
 
+    if opts["save"]
+      seq.each_with_index { |(file, msg), i|
+        msg.idx = i
+      }
+      ctx['seq'] = seq
+      ctx['cur'] = cur 
+    end
+
     unless opts["q"]
       # XXX this can be improved.  implement a whole templating language? ugh.
-      seq.each_with_index { |(_, msg), i|
+      seq.each { |file, msg|
+        i = msg.idx || 0
 # XXX simple two-line format
 #      puts "%4d%s%s%s\n%-3s  %s  %s" % [i+1, (i+1 == cur ? "*" : " "),
 #                                      "  "*depth, s, fl,
 #                                      Time.at(d).strftime("%Y-%m-%d %H:%M"), fr]
         width = opts['width'] ? opts['width'].first.to_i : term_width
         # timely-like single-line format
-        puts "%4d%1s%1s%10s  %s  %s\n" % [i+1, (i+1 == cur ? "+" :
+        puts "%4d%1s%1s%10s  %s  %s\n" % [msg.idx+1, (msg.idx+1 == cur ? "+" :
                                                (msg.flags !~ /S/ ? "." : " ")),
                                          (msg.flags =~ /R/ ? "-" : " "),
                                          nicedate(Time.at(msg.date)),
                                          nicefrom(msg.from, 17),
                                          nicesubj(msg.subj, width-37, msg.depth)]
       }
-    end
-
-    if opts["save"]
-      ctx['seq'] = seq
-      ctx['cur'] = cur 
     end
   }
 end
