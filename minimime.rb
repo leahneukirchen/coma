@@ -36,9 +36,9 @@ class MiniMime
 
     str.split(" ").map { |word|
       if word =~ /=\?(.+)\?[Bb]\?(.*)\?=/m
-        Iconv.conv(encoding, $1, $2.unpack("m*").first)
+        Iconv.conv("#{encoding}//IGNORE", $1, $2.unpack("m*").first)
       elsif word =~ /=\?(.+)\?[Qq]\?(.*)\?=/m
-        Iconv.conv(encoding, $1, $2.unpack("M*").first).tr('_', ' ')
+        Iconv.conv("#{encoding}//IGNORE", $1, $2.unpack("M*").first).tr('_', ' ')
       else
         word
       end
