@@ -266,7 +266,11 @@ def select(ctx, opts)
       seq = seq.values_at(*[*idx].map { |x| x-1 })
       abort "invalid references"  if seq.include?(nil)
     rescue ArgumentError
-      cache = File.open(folder2cache(folder)) { |f| Marshal.load(f) }
+      begin
+        cache = File.open(folder2cache(folder)) { |f| Marshal.load(f) }
+      rescue Errno::ENOENT
+        abort "coma: could't find cache file, do you need to 'coma inc' first?"
+      end
       seq = []
       unless folder == "+"
         ctx['folder'] = folder
