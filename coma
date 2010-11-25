@@ -661,6 +661,11 @@ def cmd_mark(*argv)
   File.open(folder2cache("+"), "w") { |f| Marshal.dump(cache, f) }
 end
 
+def cmd_usage(*argv)
+  puts "Subcommands: " + Object.private_instance_methods.grep(/cmd_/).
+    map { |cmd| cmd.sub(/^cmd_/, '') }.sort.join(" ")
+end
+
 command = ARGV.first || 'usage'
 if defined?("cmd_#{command}")
   send "cmd_#{command}", *ARGV[1..-1]
