@@ -327,6 +327,10 @@ end
 def cmd_scan(*argv)
   opts = parse argv
 
+  if !opts["args"].empty? && !opts["from"] && !opts["date"] && !opts["subject"]
+    opts["thread"] = true
+  end
+
   with_context { |ctx|
     seq, cur = select(ctx, opts)
 
