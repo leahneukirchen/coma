@@ -246,7 +246,7 @@ end
 
 def nicesubj(s, size, depth)
   s = strip_re(s)  if depth > 0
-  ("  "*depth + s)[0, size].to_s.ljust(size)
+  ("  "*depth + s).unpack("U*")[0, size].pack("U*").ljust(size)
 end
 
 def select(ctx, opts)
