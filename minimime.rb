@@ -9,7 +9,7 @@ class MiniMime
 
   def initialize(msg)
     @raw = msg
-    @header, @body = @raw.split(/\r\n[\t ]*\r\n/m, 2)
+    @header, @body = @raw.split(/\A\r\n|\r\n[\t ]*\r\n/m, 2)
 
     @fields = {}
 
@@ -93,7 +93,7 @@ class MiniMime
   end
 
   def content_type
-    parse_ct(get("content-type"))
+    parse_ct(get("content-type")) || ["text", "plain", {}]
   end
 
   def render_body(encoding="utf-8")
