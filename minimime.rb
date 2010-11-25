@@ -71,7 +71,7 @@ class MiniMime
   def render
     %w{from subject to cc date}.map { |field|
       "#{field.capitalize}: #{self[field].strip}\n"  if self[field]
-    }.join + "\n\n" + render_body
+    }.join + "\n" + render_body
   end
 
   def wrap_text(txt, col = 80)
