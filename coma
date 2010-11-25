@@ -106,7 +106,7 @@ def cmd_inc(*argv)
                       Time.parse(email["date"]).to_f,
                       email["from"],
                       email["in-reply-to"],
-                      0, 0)
+                      nil, 0)
         cache[File.join(fpath,file)] = msg
         num += 1
         unread += 1  unless msg.flags =~ /S/
@@ -349,15 +349,22 @@ def cmd_scan(*argv)
     unless opts["q"]
       # XXX this can be improved.  implement a whole templating language? ugh.
       seq.each { |file, msg|
-        i = msg.idx || 0
 # XXX simple two-line format
 #      puts "%4d%s%s%s\n%-3s  %s  %s" % [i+1, (i+1 == cur ? "*" : " "),
 #                                      "  "*depth, s, fl,
 #                                      Time.at(d).strftime("%Y-%m-%d %H:%M"), fr]
         width = opts['width'] ? opts['width'].first.to_i : term_width
         # timely-like single-line format
-        puts "%4d%1s%1s%10s  %s  %s\n" % [msg.idx+1, (msg.idx+1 == cur ? "+" :
-                                               (msg.flags !~ /S/ ? "." : " ")),
+        if msg.idx
+          idx = msg.idx+1
+          flag = (idx == cur ? "+" : nil)
+        else
+          idx = ''
+          flag = nil
+        end
+        flag ||= (msg.flags !~ /S/ ? "." : " ")
+        puts "%4s%1s%1s%10s  %s  %s\n" % [idx,
+                                          flag,
                                          (msg.flags =~ /R/ ? "-" : " "),
                                          nicedate(Time.at(msg.date)),
                                          nicefrom(msg.from, 17),
