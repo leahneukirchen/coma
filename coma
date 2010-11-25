@@ -339,7 +339,7 @@ def cmd_scan(*argv)
 #                                      Time.at(d).strftime("%Y-%m-%d %H:%M"), fr]
         width = opts['width'] ? opts['width'].first.to_i : term_width
         # timely-like single-line format
-        puts "%4d%1s%1s%9s  %s  %s\n" % [i+1, (i+1 == cur ? "+" :
+        puts "%4d%1s%1s%10s  %s  %s\n" % [i+1, (i+1 == cur ? "+" :
                                                (msg.flags !~ /S/ ? "." : " ")),
                                          (msg.flags =~ /R/ ? "-" : " "),
                                          nicedate(Time.at(msg.date)),
