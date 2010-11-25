@@ -493,9 +493,15 @@ def cmd_folders(*argv)
     new[File.dirname(file).gsub(%r{/new\z}, '/cur')] += 1
   }
   num.keys.sort.each { |folder|
+    next  if opts["u"] && unread[folder] + new[folder] == 0
+
     f = folder.gsub(/\A#{Regexp.quote(File.expand_path($MAILDIR_PREFIX))}\/?/, '+').
     gsub(/\/cur\z/, '')
-    puts "%-20s %5d messages %5d unread %5d new" % [f, num[folder], unread[folder], new[folder]]
+    if opts["s"]
+      puts "%-15s %5d/%3d/%3d" % [f[0,14], num[folder], unread[folder], new[folder]]
+    else
+      puts "%-20s %5d messages %5d unread %5d new" % [f, num[folder], unread[folder], new[folder]]
+    end
   }
 end
 
