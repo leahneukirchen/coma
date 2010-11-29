@@ -9,7 +9,7 @@ class MiniMime
 
   def initialize(msg)
     @raw = msg
-    @header, @body = @raw.split(/\A\r\n|\r\n[\t ]*\r\n/m, 2)
+    @header, @body = @raw.split(/\A\r\n|\r\n\r\n/m, 2)
 
     @fields = {}
 
