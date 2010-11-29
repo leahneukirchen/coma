@@ -96,6 +96,71 @@ class MiniMime
     parse_ct(get("content-type")) || ["text", "plain", {}]
   end
 
+  def extract(n, count=[0])
+    main, sub, opts = content_type
+
+    count[0] += 1
+
+    if count[0] == n
+      return opts["name"], body
+    end
+  
+    case main
+    when "text", "image", "audio", "video", "application"
+      nil
+    when "multipart"
+      parse_parts.each { |mp|
+        x = mp.extract(n, count)
+        if x
+          return x
+        end
+      }
+    when "message"
+      case sub
+      when "rfc822"
+        MiniMime.new(body).extract(n, count)
+      else
+        raise "unhandled type #{self["content-type"]}"
+      end
+    else
+      raise "can't deal with #{self["content-type"]}"
+    end
+
+    nil
+  end
+
+  def render_tree(n=nil, depth=0, count=[0])
+    main, sub, opts = content_type
+
+    count[0] += 1
+
+    if count[0] == n
+      return body
+    end
+
+    ("%1d %s %s/%s %dB%s\n" % [count[0], "  "*depth,
+                               main, sub, body.size,
+                               opts["name"] ? " #{opts["name"].dump}" : ""]) +
+  
+    case main
+    when "text", "image", "audio", "video", "application"
+      ""
+    when "multipart"
+      parse_parts.map { |mp|
+        mp.render_tree(n, depth+1, count)
+      }.join("")
+    when "message"
+      case sub
+      when "rfc822"
+        MiniMime.new(body).render_tree(n, depth+1, count)
+      else
+        "--unhandled type #{self["content-type"]}--\n"
+      end
+    else
+      raise "can't deal with #{self["content-type"]}"
+    end
+  end
+
   def render_body(encoding="utf-8")
     main, sub, opts = content_type
 

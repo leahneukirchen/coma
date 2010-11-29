@@ -59,7 +59,7 @@ def parse(argv)
   opts = {"args" => []}
 
   argv.each { |arg|
-    if arg =~ /\A-/
+    if arg =~ /\A-(?=.)/
       opt = $'
       opts[opt] = []
     else
@@ -468,6 +468,40 @@ end
 
 def cmd_prev
   cmd_show("prev")
+end
+
+def cmd_att(*argv)
+  opts = parse argv
+
+  with_context { |ctx|
+    file = ctx['seq'][ctx['cur'] - 1][0]
+    text = File.read(file)
+    # Unix to Internet line conversion.
+    text.gsub!("\n", "\r\n")  unless text =~ /\r\n[\t ]*\r\n/m
+
+    if opts['args'].empty?
+      puts MiniMime.new(text).render_tree
+    else
+      n, filename, _ = opts['args']
+      n = Integer(n)
+      name, body = MiniMime.new(text).extract(n)
+
+      name ||= "attachment-#{n}"
+
+      sanitized = name.tr(" ", "-").delete("^a-zA-Z0-9_.-").sub(/\A\.+/, '')
+      outfile = filename || sanitized
+
+      if outfile == "-"
+        puts body
+      else
+        if File.exist?(outfile) && !opts['f']
+          abort "#{outfile.dump} already exists, use -f to override."
+        else
+          File.open(outfile, "w") { |out| out << body }
+        end
+      end
+    end
+  }
 end
 
 def cmd_folders(*argv)
