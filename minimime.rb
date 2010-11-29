@@ -161,8 +161,10 @@ class MiniMime
     end
   end
 
-  def render_body(encoding="utf-8")
+  def render_body(encoding="utf-8", count=[0])
     main, sub, opts = content_type
+
+    count[0] += 1
 
     case main
     when "text"
@@ -183,21 +185,21 @@ class MiniMime
           pipe.read
         }
       else
-        "--unhandled type #{part["content-type"]}--\n" + body
+        "#{count[0]} --unhandled type #{part["content-type"]}--\n" + body
       end
     when "image"
       IO.popen("identify -format '%b %m %wx%h' -", "w+") { |pipe|
         pipe.write body
         pipe.close_write
-        "--image #{pipe.read.strip} #{opts["name"]}--"
+        "#{count[0]} --image #{pipe.read.strip} #{opts["name"]}--"
       }
     when "audio", "video", "application"
-      "--#{main}/#{sub} #{body.size}B #{opts["name"]}--"
+      "#{count[0]} --#{main}/#{sub} #{body.size}B #{opts["name"]}--"
     when "multipart"
       case sub
       when "mixed", "related", "digest", "report", "signed", "appledouble"
         parse_parts.map { |mp|
-          mp.render_body(encoding)
+          mp.render_body(encoding, count)
         }.join("\n")
       when "alternative"
         sparts = parse_parts.sort_by { |mp|
@@ -208,18 +210,19 @@ class MiniMime
              "html" => 5 }[s] || 0]
         }
 
-        sparts.last.render_body(encoding) + "\n\n--Alternatives:\n" +
+        sparts.last.render_body(encoding, count) + "\n\n--Alternatives:\n" +
         sparts[0..-2].map { |mp|
-          "  --#{mp.get("content-type")}--"
+          count[0] += 1
+          "#{count[0]} --#{mp.get("content-type")}--"
         }.join("\n")
       else  # XXX encrypted, 
-        "--unhandled type #{self["content-type"]}--\n"
+        "#{count[0]} --unhandled type #{self["content-type"]}--\n"
       end
     when "message"
       case sub
       when "rfc822"
-        "--#{get("content-type")} #{body.size}B--\n" +
-          MiniMime.new(body).render_body(encoding)
+        "#{count[0]} --#{get("content-type")} #{body.size}B--\n" +
+          MiniMime.new(body).render_body(encoding, count)
       else
         "--unhandled type #{self["content-type"]}--\n" + body
       end
