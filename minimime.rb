@@ -132,7 +132,7 @@ class MiniMime
       case sub
       when "mixed", "related", "digest", "report", "signed", "appledouble"
         parse_parts.map { |mp|
-          mp.render_body
+          mp.render_body(encoding)
         }.join("\n")
       when "alternative"
         sparts = parse_parts.sort_by { |mp|
@@ -143,7 +143,7 @@ class MiniMime
              "html" => 5 }[s] || 0]
         }
 
-        sparts.last.render_body + "\n\n--Alternatives:\n" +
+        sparts.last.render_body(encoding) + "\n\n--Alternatives:\n" +
         sparts[0..-2].map { |mp|
           "  --#{mp.get("content-type")}--"
         }.join("\n")
@@ -154,7 +154,7 @@ class MiniMime
       case sub
       when "rfc822"
         "--#{get("content-type")} #{body.size}B--\n" +
-          MiniMime.new(body).render_body
+          MiniMime.new(body).render_body(encoding)
       else
         "--unhandled type #{self["content-type"]}--\n" + body
       end
