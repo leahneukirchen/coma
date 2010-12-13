@@ -92,11 +92,15 @@ def cmd_inc(*argv)
 
       fpath = folder2path(folder)
 
-      Dir.foreach(File.join(fpath, "/../new/")) { |file|
-        next  if file =~ /\A\./
-        File.rename file, "#{fpath}/#{File.basename(file)}:2,"
-        new += 1
-      }
+      begin
+        Dir.foreach(File.join(fpath, "/../new/")) { |file|
+          next  if file =~ /\A\./
+          File.rename file, "#{fpath}/#{File.basename(file)}:2,"
+          new += 1
+        }
+      rescue Errno::ENOENT
+        abort "No such folder #{fpath}"
+      end
       Dir.foreach(fpath) { |file|
         next  if file =~ /\A\./
         email = MiniMime.new(File.read(File.join(fpath, file)).gsub("\n", "\r\n"))
