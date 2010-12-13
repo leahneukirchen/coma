@@ -292,7 +292,7 @@ def expr(scanner, ctx, initial, opts)
     elsif scanner.scan(/reverse/)
       reverse = !reverse
 
-    elsif scanner.scan(/(next|prev|cur|\.|first|last|all|thr|sub|[+-]?\d+)(:([+-]?(\d+)|thr|sub)|-(next|prev|cur|\.|first|last|all|(\d+)))?/)
+    elsif scanner.scan(/(next|prev|cur|\.|first|last|all|thr|sub(?!ject)|[+-]?\d+)(:([+-]?(\d+)|thr|sub)|-(next|prev|cur|\.|first|last|all|(\d+)))?/)
 
       selected = []  if selected == :all
       [*ref2idx(ctx, scanner.matched)].each { |idx|
@@ -307,7 +307,7 @@ def expr(scanner, ctx, initial, opts)
                 when "date"; pattern = Time.parse(pattern).to_f; msg.date
                 when "from"; msg.from
                 else
-                  raise "unknown field, add code to load mail"
+                  raise "unknown field #{scanner[1].dump}, add code to load mail"
                 end
         case scanner[2]
         when ":"
@@ -339,6 +339,7 @@ def expr(scanner, ctx, initial, opts)
         seq << [k, v]
       }
       using_initial = false
+      seq = thread(seq, reverse)
 
     elsif scanner.scan(/\|/)
       seq |= expr(scanner, ctx, initial, opts)
@@ -397,9 +398,7 @@ def expr(scanner, ctx, initial, opts)
 end
 
 def cmd_read(*argv)
-  argv << "thread"  unless argv.inspect =~ /date|from|subj/
-  argv << "-save"
-  cmd_scan(*argv)
+  cmd_scan(*(argv << "-save"))
 end
 
 def cmd_scan(*argv)
