@@ -327,6 +327,7 @@ def expr(scanner, ctx, initial, opts)
     elsif scanner.scan(/\+(\S*)/)
       seq = []  if using_initial
 
+      folder = scanner.matched
       begin
         cache = File.open(folder2cache(folder)) { |f| Marshal.load(f) }
       rescue Errno::ENOENT
@@ -386,7 +387,7 @@ def expr(scanner, ctx, initial, opts)
       raise "can't parse #{scanner.rest.dump}"
     end
   end
-
+  
   seq = seq[-Integer(opts['last'].first || 20)..-1]  if opts['last']
 
   if selected == :all
@@ -397,7 +398,9 @@ def expr(scanner, ctx, initial, opts)
 end
 
 def cmd_read(*argv)
-  cmd_scan(*(argv + ["-save", "-thread"]))
+  argv << "thread"  unless argv.inspect =~ /date|from|subj/
+  argv << "-save"
+  cmd_scan(*argv)
 end
 
 def cmd_scan(*argv)
