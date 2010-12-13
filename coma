@@ -292,8 +292,7 @@ def expr(scanner, ctx, initial, opts)
     elsif scanner.scan(/reverse/)
       reverse = !reverse
 
-#    elsif scanner.scan(/(next|prev|cur|first|last|thr|sub|all|[+-]?\d+|\.)([-:](next|prev|cur|first|last|thr|sub|all|[+-]?\d+|\.))?/)
-    elsif scanner.scan(/(next|prev|cur|\.|first|last|all|thr|sub|[+-]?\d+)(:([+-]?(\d+)|thr|sub)|-(next|prev|cur|\.|first|last|all|))?/)
+    elsif scanner.scan(/(next|prev|cur|\.|first|last|all|thr|sub|[+-]?\d+)(:([+-]?(\d+)|thr|sub)|-(next|prev|cur|\.|first|last|all|(\d+)))?/)
 
       selected = []  if selected == :all
       [*ref2idx(ctx, scanner.matched)].each { |idx|
@@ -762,7 +761,7 @@ def cmd_mark(*argv)
 
   with_context { |ctx|
     seq, cur = select(ctx, opts)
-    seq.each_with_index { |(_, msg), i|
+    seq.each_with_index { |(ofile, msg), i|
       file = msg.file.dup
       flags = msg.flags.split(//)
 
@@ -780,7 +779,8 @@ def cmd_mark(*argv)
       File.rename file, msg.file
       cache[msg.file.dup] = msg
       cache.delete file
-      ctx['seq'][msg.idx+1][0] = msg.file
+
+      ofile.replace msg.file   # this updates the ctx!
     }
   }
 
