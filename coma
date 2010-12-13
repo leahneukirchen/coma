@@ -60,7 +60,7 @@ def parse(argv)
   opts = {"args" => []}
 
   argv.each { |arg|
-    if arg =~ /\A-(?=.)/
+    if arg =~ /\A-(?=.)(?!\d)/
       opt = $'
       opts[opt] = []
     else
@@ -218,9 +218,6 @@ def thread(seq, reverse)
   sorted
 end
 
-def cmd_read(*argv)
-end
-
 $now = Time.now
 def nicedate(t)
   if $now.year == t.year && $now.month == t.month
@@ -289,6 +286,15 @@ def expr(scanner, ctx, initial, opts)
       seq &= expr(scanner, ctx, seq, opts)
     elsif scanner.scan(/\)/)
       break
+
+#    elsif scanner.scan(/(next|prev|cur|first|last|thr|sub|all|[+-]?\d+|\.)([-:](next|prev|cur|first|last|thr|sub|all|[+-]?\d+|\.))?/)
+    elsif scanner.scan(/(next|prev|cur|\.|first|last|all|thr|sub|[+-]?\d+)(:([+-]?(\d+)|thr|sub)|-(next|prev|cur|\.|first|last|all|))?/)
+
+      selected = []  if selected == :all
+      [*ref2idx(ctx, scanner.matched)].each { |idx|
+        selected << idx-1
+      }
+
     elsif scanner.scan(/(#{TOKEN})([:~<>=])(?:('([^']*)'|#{TOKEN}))/)
       seq = seq.find_all { |_, msg|
         pattern = scanner[4] || scanner[3]
@@ -317,12 +323,6 @@ def expr(scanner, ctx, initial, opts)
       seq = thread(seq, reverse)
     elsif scanner.scan(/reverse/)
       reverse = !reverse
-
-    elsif scanner.scan(/(next|prev|cur|first|last|thr|all|[+-]?\d+|\.)(-(next|prev|cur|first|last|thr|all|[+-]?\d+|\.))?/)
-      selected = []  if selected == :all
-      [*ref2idx(ctx, scanner.matched)].each { |idx|
-        selected << idx-1
-      }
 
     elsif scanner.scan(/\+(\S*)/)
       seq = []  if using_initial
@@ -460,10 +460,18 @@ def ref2idx(ctx, ref)
   end
 
   case ref
+  when /(.*):([+-]?)(\d+)\z/
+    idx = ref2idx(ctx, $1)
+    case $2
+    when "";  idx..idx+Integer($3)-1 #XXX not MH-style, depends on first/last
+    when "+"; idx..idx+Integer($3)-1
+    when "-"; idx-Integer($3)+1..idx
+    end
   when /.-./
     a, b = ref.split("-", 2)
     ref2idx(ctx, a)..ref2idx(ctx, b)
   when /\A[+-]\d+\z/
+    p $&
     if ctx['seq'][ctx['cur'] - 1 + Integer(ref)]
       ctx['cur'] + Integer(ref)
     else
@@ -478,12 +486,24 @@ def ref2idx(ctx, ref)
   when "all"
     1..ctx['seq'].size
   when "thr"
-    start = ctx['cur']
+    ref2idx(ctx, "cur:thr")
+  when /(.*):thr\z/
+    start = ref2idx(ctx, $1)
     while ctx['seq'][start-1][1].depth > 0 && start >= 1
       start -= 1
     end
     stop = start+1
     while ctx['seq'][stop-1][1].depth != 0 && stop < ctx['seq'].size
+      stop += 1
+    end
+    start..stop-1
+  when "sub"
+    ref2idx(ctx, "cur:sub")
+  when /(.*):sub\z/
+    start = ref2idx(ctx, $1)
+    depth = ctx['seq'][start-1][1].depth
+    stop = start + 1
+    while ctx['seq'][stop-1][1].depth > depth && stop < ctx['seq'].size
       stop += 1
     end
     start..stop-1
