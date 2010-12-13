@@ -287,6 +287,11 @@ def expr(scanner, ctx, initial, opts)
     elsif scanner.scan(/\)/)
       break
 
+    elsif scanner.scan(/thread/)
+      seq = thread(seq, reverse)
+    elsif scanner.scan(/reverse/)
+      reverse = !reverse
+
 #    elsif scanner.scan(/(next|prev|cur|first|last|thr|sub|all|[+-]?\d+|\.)([-:](next|prev|cur|first|last|thr|sub|all|[+-]?\d+|\.))?/)
     elsif scanner.scan(/(next|prev|cur|\.|first|last|all|thr|sub|[+-]?\d+)(:([+-]?(\d+)|thr|sub)|-(next|prev|cur|\.|first|last|all|))?/)
 
@@ -318,11 +323,6 @@ def expr(scanner, ctx, initial, opts)
           raise "invalid selector #{scanner.matched}"
         end
       }
-
-    elsif scanner.scan(/thread/)
-      seq = thread(seq, reverse)
-    elsif scanner.scan(/reverse/)
-      reverse = !reverse
 
     elsif scanner.scan(/\+(\S*)/)
       seq = []  if using_initial
@@ -471,7 +471,6 @@ def ref2idx(ctx, ref)
     a, b = ref.split("-", 2)
     ref2idx(ctx, a)..ref2idx(ctx, b)
   when /\A[+-]\d+\z/
-    p $&
     if ctx['seq'][ctx['cur'] - 1 + Integer(ref)]
       ctx['cur'] + Integer(ref)
     else
@@ -762,11 +761,9 @@ def cmd_mark(*argv)
   cache = File.open(folder2cache("+")) { |f| Marshal.load(f) }
 
   with_context { |ctx|
-    opts['args'].map { |ref| [*ref2idx(ctx, ref)] }.
-    flatten.each_with_index { |idx, i|
-      file = ctx['seq'][idx - 1][0].dup
-      msg = ctx['seq'][idx - 1][1]
-
+    seq, cur = select(ctx, opts)
+    seq.each_with_index { |(_, msg), i|
+      file = msg.file.dup
       flags = msg.flags.split(//)
 
       flags |= ["F"]  if opts['flagged']
@@ -781,9 +778,9 @@ def cmd_mark(*argv)
       next  if file == msg.file
 
       File.rename file, msg.file
-      cache[msg.file] = msg
+      cache[msg.file.dup] = msg
       cache.delete file
-      ctx['seq'][idx - 1][0] = msg.file
+      ctx['seq'][msg.idx+1][0] = msg.file
     }
   }
 
