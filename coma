@@ -239,7 +239,7 @@ def nicefrom(t, size)
     t = $1.delete('"')
   end
   t = t.strip.squeeze(" ")
-  t[0, size].ljust(size)
+  (t + " "*size).unpack("U*")[0, size].pack("U*")
 end
 
 def strip_re(s)
