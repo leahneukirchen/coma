@@ -526,13 +526,13 @@ def cmd_show(*argv)
     at_exit { $stdout.close }
   end
 
-  keep = opts['keep'] || opts['path'] || opts['raw'] || opts['idx'] || opts['select']
   seen = []
 
   with_context { |ctx|
     seq, cur = select(ctx, opts)
 
     seq.each_with_index { |(file, msg), i|
+      p i
       ctx['cur'] = msg.idx+1  if msg.idx
       if opts['path']
         puts file
@@ -550,7 +550,7 @@ def cmd_show(*argv)
     }
   }
 
-  cmd_mark(*(seen << "-seen"))  unless keep
+  cmd_mark(*(seen << "-seen"))  unless opts['keep'] || seen.empty?
 end
 
 def cmd_next
