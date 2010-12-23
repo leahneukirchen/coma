@@ -531,7 +531,7 @@ def cmd_show(*argv)
     seq, cur = select(ctx, opts)
 
     seq.each_with_index { |(file, msg), i|
-      ctx['cur'] = msg.idx+1  if msg.idx
+      ctx['cur'] = msg.idx+1  if msg.idx && !opts["keep"]
       if opts['path']
         puts file
       elsif opts['raw']
