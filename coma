@@ -678,6 +678,7 @@ def cmd_att(*argv)
           abort "#{outfile.dump} already exists, use -f to override."
         else
           File.open(outfile, "w") { |out| out << body }
+          puts outfile
         end
       end
     end
