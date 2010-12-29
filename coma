@@ -228,6 +228,7 @@ def nicedate(t)
 end
 
 def nicefrom(t, size)
+  size = [0, size].max
   if t =~ /(.*) <.*>/
     t = $1.delete('"')
   end
@@ -414,6 +415,71 @@ def cmd_read(*argv)
   cmd_scan(*(argv << "-save"))
 end
 
+# This is roughly scan.YYYYMMDD
+def fmt_default(msg, cur, opts)
+  width = opts['width'] ? opts['width'].first.to_i : term_width
+  # timely-like single-line format
+  if msg.idx
+    idx = msg.idx+1
+    flag = (msg.idx == cur ? "+" : nil)
+  else
+    idx = ''
+    flag = nil
+  end
+  flag ||= (msg.flags !~ /S/ ? "." : " ")
+  puts "%4s%1s%1s%10s  %s  %s\n" % [idx,
+                                    flag,
+                                    (msg.flags =~ /R/ ? "-" : " "),
+                                    nicedate(Time.at(msg.date)),
+                                    nicefrom(msg.from, 17),
+                                    nicesubj(msg.subj, width-37, msg.depth)]
+end
+
+# the original nmh format
+def fmt_nmh(msg, cur, opts)
+  width = opts['width'] ? opts['width'].first.to_i : term_width
+  # timely-like single-line format
+  if msg.idx
+    idx = msg.idx+1
+    flag = (msg.idx == cur ? "+" : nil)
+  else
+    idx = ''
+    flag = nil
+  end
+  flag ||= (msg.flags !~ /S/ ? "." : " ")
+  puts "%4s%1s%1s%4s  %s  %s\n" % [idx,
+                                    flag,
+                                    (msg.flags =~ /R/ ? "-" : " "),
+                                    Time.at(msg.date).strftime("%m/%d"),
+                                    nicefrom(msg.from, 17),
+                                    nmhsubj(msg, width-32)]
+end
+
+def nmhsubj(msg, width)
+  text = metamail(msg.file).sub(/.*?\n\n\S*/m, "").gsub(/\s+/, " ").lstrip
+  (msg.subj + "<<" + text + ">>").unpack("U*")[0, width].pack("U*").ljust(width)
+end
+
+def fmt_twoline(msg, cur, opts)
+  width = opts['width'] ? opts['width'].first.to_i : term_width
+  puts "%4d%s%s\n%4s %s  %s" % [msg.idx+1, (msg.idx+1 == cur ? "*" : " "),
+                                    nicesubj(msg.subj, width-37, msg.depth),
+                                    msg.flags,
+                                    Time.at(msg.date).strftime("%Y-%m-%d %H:%M"),
+                                    msg.from]
+end
+
+# inspired by 9fans.net/archive
+def fmt_9fans(msg, cur, opts)
+  width = opts['width'] ? opts['width'].first.to_i : term_width
+  if msg.depth == 0
+    puts  if msg.idx > 0
+    puts nicesubj(msg.subj, width, msg.depth)
+  end
+  puts "  %4d%s   %s %s" % [msg.idx+1, (msg.idx+1 == cur ? "*" : " "),
+                          nicefrom(msg.from, width-42), Time.at(msg.date).rfc2822]
+end
+
 def cmd_scan(*argv)
   opts = parse argv
 
@@ -434,29 +500,10 @@ def cmd_scan(*argv)
     end
 
     unless opts["q"]
-      # XXX this can be improved.  implement a whole templating language? ugh.
       seq.each { |file|
         msg = Msg::Cache[file]
-# XXX simple two-line format
-#      puts "%4d%s%s%s\n%-3s  %s  %s" % [i+1, (i+1 == cur ? "*" : " "),
-#                                      "  "*depth, s, fl,
-#                                      Time.at(d).strftime("%Y-%m-%d %H:%M"), fr]
-        width = opts['width'] ? opts['width'].first.to_i : term_width
-        # timely-like single-line format
-        if msg.idx
-          idx = msg.idx+1
-          flag = (msg.idx == cur ? "+" : nil)
-        else
-          idx = ''
-          flag = nil
-        end
-        flag ||= (msg.flags !~ /S/ ? "." : " ")
-        puts "%4s%1s%1s%10s  %s  %s\n" % [idx,
-                                          flag,
-                                         (msg.flags =~ /R/ ? "-" : " "),
-                                         nicedate(Time.at(msg.date)),
-                                         nicefrom(msg.from, 17),
-                                         nicesubj(msg.subj, width-37, msg.depth)]
+        send("fmt_#{opts["fmt"] ? opts["fmt"].first : "default"}",
+             msg, cur, opts)
       }
     end
   }
