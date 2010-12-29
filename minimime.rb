@@ -185,7 +185,7 @@ class MiniMime
           pipe.read
         }
       else
-        "#{count[0]} --unhandled type #{part["content-type"]}--\n" + body
+        "#{count[0]} --unhandled type #{self["content-type"]}--\n" + body
       end
     when "image"
       IO.popen("identify -format '%b %m %wx%h' -", "w+") { |pipe|
