@@ -6,6 +6,7 @@ require 'fileutils'
 require 'strscan'
 require 'tempfile'
 require 'time'
+require 'sdbm'
 
 require 'minimime'
 
@@ -71,6 +72,32 @@ def parse(argv)
   opts
 end
 
+class PersistentCache
+  def initialize(file)
+    @inner_cache = {}
+    @cache = SDBM.new(file)
+  end
+
+  def []=(key, value)
+    @cache[key] = Marshal.dump(value)
+  end
+
+  def [](key)
+    @inner_cache[key] ||= Marshal.load(@cache.fetch(key))
+  rescue IndexError
+    begin
+      self[key] = Msg.parse(key)
+    rescue Errno::ENOENT
+      nil
+    end
+  end
+
+  def delete(key)
+    @inner_cache.delete key
+    @cache.delete key
+  end
+end
+
 Msg = Struct.new(:file, :mid, :subj, :date, :from, :irt, :idx, :depth)
 class Msg
   def self.parse(file)
@@ -91,6 +118,8 @@ class Msg
   def flags=(newflags)
     self.file = file.gsub(/:2,([a-z]*)/i, ":2,#{newflags}")
   end
+
+  Cache = PersistentCache.new(File.expand_path("~/.config/coma/headercache"))
 end
 
 def cmd_inc(*argv)
@@ -132,7 +161,8 @@ end
 # based on mhthread, mostly works
 # 24aug2010  +chris+
 def thread(seq, reverse)
-  mails = seq.map { |file, msg|
+  mails = seq.map { |file|
+    msg = Msg::Cache[file]
     re_in_subj = false
     sortsubj = msg.subj.strip.gsub(/^(re\[\d+\][:;]\s*)+/i) {
       re_in_subj = true
@@ -206,7 +236,8 @@ def thread(seq, reverse)
 
   sorted = []
   rec = lambda { |level, mid, msg|
-    sorted << [msg[:file], Msg.new(*msg.values_at(:file, :mid, :orig_subj, :date, :from, :irt, :idx) << level)]
+    sorted << msg[:file]
+    Msg::Cache[msg[:file]].depth = level
     tree[mid].keys.sort_by { |a| mid2msg[a][:date] }.each { |kid|
       rec[level+1, kid, tree[mid][kid]]
     }
@@ -261,17 +292,18 @@ def select(ctx, opts)
   seq = ctx['seq']
 
   file2idx = {}
-  seq.each_with_index { |(file,msg), i| file2idx[file] = i }
+  seq.each_with_index { |file, i| file2idx[file] = i }
 
-  mid = seq[ctx['cur']-1][1].mid  rescue nil
+  mid = Msg::Cache[seq[ctx['cur']-1]].mid  rescue nil
 
   scanner = StringScanner.new(opts["args"].join(" "))
   seq = expr(scanner, ctx, seq.dup, opts)
   scanner.eos?  or raise "trailing junk"
 
-  seq.each { |(file,msg)| msg.idx = file2idx[file] }
+  seq.each { |file| Msg::Cache[file].idx = file2idx[file] }
 
-  seq.each_with_index { |(file,msg), i|
+  seq.each_with_index { |file, i|
+    msg = Msg::Cache[file]
     return [seq, msg.idx]  if msg.mid == mid
   }
 
@@ -294,7 +326,7 @@ def expr(scanner, ctx, initial, opts)
 
     elsif scanner.scan(/\.?\/\S+/)
       selected = []  if selected == :all
-      seq << [scanner.matched, Msg.parse(scanner.matched)]
+      seq << scanner.matched
       selected << seq.size-1
 
     elsif scanner.scan(/thread/)
@@ -310,7 +342,8 @@ def expr(scanner, ctx, initial, opts)
       }
 
     elsif scanner.scan(/(#{TOKEN})([:~<>=])(?:('([^']*)'|#{TOKEN}))/)
-      seq = seq.find_all { |_, msg|
+      seq = seq.find_all { |file|
+        msg = Msg::Cache[file]
         pattern = scanner[4] || scanner[3]
         field = case scanner[1]
                 when "subj", "subject"; msg.subj
@@ -337,16 +370,13 @@ def expr(scanner, ctx, initial, opts)
       seq = []  if using_initial
 
       folder = scanner.matched
-      begin
-        cache = File.open(folder2cache(folder)) { |f| Marshal.load(f) }
-      rescue Errno::ENOENT
-        abort "coma: could't find cache file, do you need to 'coma inc' first?"
-      end
-      unless folder == "+"
-        ctx['folder'] = folder
-      end
-      cache.each { |k, v|
-        seq << [k, v]
+      ctx['folder'] = folder  unless folder == "+"
+
+      fpath = folder2path(folder)
+      Dir.foreach(fpath) { |file|
+        next  if file =~ /\A\./
+        next  unless File.file? File.join(fpath, file)
+        seq << File.join(fpath, file)
       }
       using_initial = false
       seq = thread(seq, reverse)
@@ -359,20 +389,21 @@ def expr(scanner, ctx, initial, opts)
       seq -= expr(scanner, ctx, initial, opts)
 
     elsif scanner.scan(/flagged/)
-      seq = seq.find_all { |_, msg| msg.flags =~ /F/ }
+      seq = seq.find_all { |file| Msg::Cache[file].flags =~ /F/ }
     elsif scanner.scan(/unflagged/)
-      seq = seq.find_all { |_, msg| msg.flags !~ /F/ }
+      seq = seq.find_all { |file| Msg::Cache[file].flags !~ /F/ }
     elsif scanner.scan(/seen/)
-      seq = seq.find_all { |_, msg| msg.flags =~ /S/ }
+      seq = seq.find_all { |file| Msg::Cache[file].flags =~ /S/ }
     elsif scanner.scan(/unseen/)
-      seq = seq.find_all { |_, msg| msg.flags !~ /S/ }
+      seq = seq.find_all { |file| Msg::Cache[file].flags !~ /S/ }
     elsif scanner.scan(/replied/)
-      seq = seq.find_all { |_, msg| msg.flags =~ /R/ }
+      seq = seq.find_all { |file| Msg::Cache[file].flags =~ /R/ }
     elsif scanner.scan(/unreplied/)
-      seq = seq.find_all { |_, msg| msg.flags !~ /R/ }
+      seq = seq.find_all { |file| Msg::Cache[file].flags !~ /R/ }
 
     elsif scanner.scan(/subject/)
-      seq = seq.sort_by { |file, msg|
+      seq = seq.sort_by { |file|
+        msg = Msg::Cache[file]
         msg.depth = 0  # reset depth
         [opts['limit'] ? msg.date.to_i/(24*60*60*opts['limit'].first.to_i) : 0,
          strip_re(msg.subj),
@@ -380,13 +411,15 @@ def expr(scanner, ctx, initial, opts)
       }
       seq.reverse!  if reverse
     elsif scanner.scan(/date/)
-      seq = seq.sort_by { |file, msg|
+      seq = seq.sort_by { |file|
+        msg = Msg::Cache[file]
         msg.depth = 0  # reset depth
         msg.date
       }
       seq.reverse!  if reverse
     elsif scanner.scan(/from/)
-      seq = seq.sort_by { |file, msg|
+      seq = seq.sort_by { |file|
+        msg = Msg::Cache[file]
         msg.depth = 0  # reset depth
         [opts['limit'] ? msg.date.to_i/(24*60*60*opts['limit'].first.to_i) : 0,
          msg.from,
@@ -422,8 +455,9 @@ def cmd_scan(*argv)
     seq, cur = select(ctx, opts)
 
     if opts["save"]
-      seq.each_with_index { |(file, msg), i|
-        msg.idx = i
+      seq.each_with_index { |file, i|
+        Msg::Cache[file].idx = i
+        Msg::Cache[file] = Msg::Cache[file]  # force write
       }
       ctx['seq'] = seq
       ctx['cur'] = cur
@@ -431,7 +465,8 @@ def cmd_scan(*argv)
 
     unless opts["q"]
       # XXX this can be improved.  implement a whole templating language? ugh.
-      seq.each { |file, msg|
+      seq.each { |file|
+        msg = Msg::Cache[file]
 # XXX simple two-line format
 #      puts "%4d%s%s%s\n%-3s  %s  %s" % [i+1, (i+1 == cur ? "*" : " "),
 #                                      "  "*depth, s, fl,
@@ -485,7 +520,12 @@ def ref2idx(ctx, ref)
       raise ArgumentError, "invalid reference"
     end
   when /\A\d+\z/
-    Integer(ref)
+    idx = Integer(ref)
+    if idx > ctx['seq'].size
+      raise ArgumentError, "no message #{idx}"
+    else
+      idx
+    end
   when "first"
     1
   when "last"
@@ -496,11 +536,11 @@ def ref2idx(ctx, ref)
     ref2idx(ctx, "cur:thr")
   when /(.*):thr\z/
     start = ref2idx(ctx, $1)
-    while ctx['seq'][start-1][1].depth > 0 && start >= 1
+    while Msg::Cache[ctx['seq'][start-1]].depth > 0 && start >= 1
       start -= 1
     end
     stop = start+1
-    while ctx['seq'][stop-1][1].depth != 0 && stop < ctx['seq'].size
+    while Msg::Cache[ctx['seq'][stop-1]].depth != 0 && stop < ctx['seq'].size
       stop += 1
     end
     start..stop-1
@@ -508,9 +548,9 @@ def ref2idx(ctx, ref)
     ref2idx(ctx, "cur:sub")
   when /(.*):sub\z/
     start = ref2idx(ctx, $1)
-    depth = ctx['seq'][start-1][1].depth
+    depth = Msg::Cache[ctx['seq'][start-1]].depth
     stop = start + 1
-    while ctx['seq'][stop-1][1].depth > depth && stop < ctx['seq'].size
+    while Msg::Cache[ctx['seq'][stop-1]].depth > depth && stop < ctx['seq'].size
       stop += 1
     end
     start..stop-1
@@ -540,7 +580,8 @@ def cmd_show(*argv)
   with_context { |ctx|
     seq, cur = select(ctx, opts)
 
-    seq.each_with_index { |(file, msg), i|
+    seq.each_with_index { |file, i|
+      msg = Msg::Cache[file]
       ctx['cur'] = msg.idx+1  if msg.idx && !opts["keep"]
       if opts['path']
         puts file
@@ -575,7 +616,7 @@ def cmd_att(*argv)
   opts = parse argv
 
   with_context { |ctx|
-    file = ctx['seq'][ctx['cur'] - 1][0]
+    file = ctx['seq'][ctx['cur'] - 1]
     text = File.read(file)
     # Unix to Internet line conversion.
     text.gsub!("\n", "\r\n")  unless text =~ /\r\n[\t ]*\r\n/m
@@ -662,7 +703,8 @@ def cmd_mail(*argv)
   with_context { |ctx|
     if opts['repl']
       ref = opts['repl'].first || "."
-      file, msg = ctx['seq'][ref2idx(ctx, ref) - 1]
+      file = ctx['seq'][ref2idx(ctx, ref) - 1]
+      msg = Msg::Cache[file]
 
       re = MiniMime.new(File.read(file).gsub("\n", "\r\n"))
       if re['reply-to'] && !opts['noreplyto']
@@ -769,7 +811,8 @@ def cmd_mark(*argv)
 
   with_context { |ctx|
     seq, cur = select(ctx, opts)
-    seq.each_with_index { |(ofile, msg), i|
+    seq.each_with_index { |ofile, i|
+      msg = Msg::Cache[ofile]
       file = msg.file.dup
       flags = msg.flags.split(//)
 
@@ -785,8 +828,8 @@ def cmd_mark(*argv)
       next  if file == msg.file
 
       File.rename file, msg.file
-      cache[msg.file.dup] = msg
-      cache.delete file
+      Msg::Cache[msg.file.dup] = msg
+      Msg::Cache.delete file
 
       ofile.replace msg.file   # this updates the ctx!
     }
