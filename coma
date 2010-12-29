@@ -484,7 +484,7 @@ def ref2idx(ctx, ref)
     a, b = ref.split("-", 2)
     ref2idx(ctx, a)..ref2idx(ctx, b)
   when /\A[+-]\d+\z/
-    if ctx['seq'][ctx['cur'] - 1 + Integer(ref)]
+    if ctx['seq'][(ctx['cur'] || 1) - 1 + Integer(ref)]
       ctx['cur'] + Integer(ref)
     else
       raise ArgumentError, "invalid reference"
