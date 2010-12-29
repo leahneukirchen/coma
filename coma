@@ -292,6 +292,11 @@ def expr(scanner, ctx, initial, opts)
     elsif scanner.scan(/\)/)
       break
 
+    elsif scanner.scan(/\.?\/\S+/)
+      selected = []  if selected == :all
+      seq << [scanner.matched, Msg.parse(scanner.matched)]
+      selected << seq.size-1
+
     elsif scanner.scan(/thread/)
       seq = thread(seq, reverse)
     elsif scanner.scan(/reverse/)
