@@ -31,10 +31,6 @@ def folder2path(folder)
   end
 end
 
-def folder2cache(folder)
-  File.expand_path(folder2path(folder) + "/../.coma.cache")
-end
-
 # XXX locking
 def with_context
   unless File.directory?(File.expand_path("~/.config/coma"))
@@ -120,42 +116,6 @@ class Msg
   end
 
   Cache = PersistentCache.new(File.expand_path("~/.config/coma/headercache"))
-end
-
-def cmd_inc(*argv)
-  opts = parse argv
-
-  with_context { |ctx|
-    opts['args'].each { |folder|
-      ctx['folder'] = folder
-      cache = {}
-      num = unread = new = 0
-
-      fpath = folder2path(folder)
-
-      begin
-        Dir.foreach(File.join(fpath, "/../new/")) { |file|
-          next  if file =~ /\A\./
-          File.rename file, "#{fpath}/#{File.basename(file)}:2,"
-          new += 1
-        }
-      rescue Errno::ENOENT
-        abort "No such folder #{fpath}"
-      end
-      Dir.foreach(fpath) { |file|
-        next  if file =~ /\A\./
-        email = MiniMime.new(File.read(File.join(fpath, file)).gsub("\n", "\r\n"))
-        msg = Msg.parse(File.join(fpath, file))
-        cache[File.join(fpath,file)] = msg
-        num += 1
-        unread += 1  unless msg.flags =~ /S/
-      }
-
-      File.open(folder2cache(folder), "w") { |f| Marshal.dump(cache, f) }
-
-      puts "%-20s %5d messages %5d unread %5d new" % [folder, num, unread, new]  unless opts['q']
-    }
-  }
 end
 
 # based on mhthread, mostly works
@@ -656,6 +616,10 @@ def cmd_att(*argv)
   }
 end
 
+def cmd_inc(*argv)
+  cmd_folders("-inc")
+end  
+
 def cmd_folders(*argv)
   opts = parse argv
 
@@ -680,6 +644,7 @@ def cmd_folders(*argv)
   }
   num.keys.sort.each { |folder|
     next  if opts["u"] && unread[folder] + new[folder] == 0
+    next  if opts["inc"] && new[folder] == 0
 
     f = folder.gsub(/\A#{Regexp.quote(File.expand_path($MAILDIR_PREFIX))}\/?/, '+').
     gsub(/\/cur\z/, '')
@@ -817,8 +782,6 @@ end
 def cmd_mark(*argv)
   opts = parse argv
 
-  cache = File.open(folder2cache("+")) { |f| Marshal.load(f) }
-
   with_context { |ctx|
     seq, cur = select(ctx, opts)
     seq.each_with_index { |ofile, i|
@@ -844,8 +807,6 @@ def cmd_mark(*argv)
       ofile.replace msg.file   # this updates the ctx!
     }
   }
-
-  File.open(folder2cache("+"), "w") { |f| Marshal.dump(cache, f) }
 end
 
 def cmd_usage(*argv)

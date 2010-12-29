@@ -39,7 +39,7 @@ XXX TODO mostly
 * You setup a reading sequence you want to progress in; usually this
   is saved in your config, here is the explicit variant
 
-    % coma read +INBOX +ruby-talk -thread
+    % coma read +INBOX +ruby-talk -thread -unseen
     [...scan lines of new mail...]
 
 * You read the mails:
