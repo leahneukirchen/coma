@@ -477,7 +477,21 @@ def fmt_9fans(msg, cur, opts)
     puts nicesubj(msg.subj, width, msg.depth)
   end
   puts "  %4d%s   %s %s" % [msg.idx+1, (msg.idx+1 == cur ? "*" : " "),
-                          nicefrom(msg.from, width-42), Time.at(msg.date).rfc2822]
+                            nicefrom(msg.from, width-42),
+                            Time.at(msg.date).rfc2822]
+end
+
+# inspired by mailx
+def fmt_mailx(msg, cur, opts)
+  width = opts['width'] ? opts['width'].first.to_i : term_width
+  puts "%s%s%s%4d %s   %s %s" % [msg.idx+1 == cur ? ">" : " ",
+                                msg.flags =~ /S/ ? " " : "N",
+                                msg.flags =~ /R/ ? "R" : " ",
+                                msg.idx+1,
+                                nicefrom(msg.from, 17),
+                                Time.at(msg.date).strftime("%a %b %02d %H:%M"),
+                                nicesubj(msg.subj, width-45, msg.depth)
+                               ]
 end
 
 def cmd_scan(*argv)
