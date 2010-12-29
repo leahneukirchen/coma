@@ -37,7 +37,7 @@ XXX TODO mostly
     +INBOX              134 messages   129 unread     5 new
 
 * You setup a reading sequence you want to progress in; usually this
-  is saved in your config, here is the explicit variant
+  is saved in your config, here is an explicit variant:
 
     % coma read +INBOX +ruby-talk -thread -unseen
     [...scan lines of new mail...]
@@ -59,8 +59,14 @@ XXX TODO mostly
 
 == Searching mail
 
-  XXX TODO
-  % mairix foobar -r | coma read -
+coma has a powerful search language that can operate on the header
+fields being cached:
+
+  % coma scan '+INBOX ( subj:foo | subj:bar ) date>2009-01-01 unreplied'
+
+For content searches, I recommend using mairix:
+
+  % coma read $(mairix -r SEARCH TERMS)
 
 == Sending mail
 
@@ -70,9 +76,81 @@ XXX TODO mostly
 
   % coma fwd
 
+== Other commands
+
+  % coma
+  Subcommands: att folders fwd inc mail mark next prev read repl scan show usage
+
+Dealing with attachments:
+
+Folder list:
+
+  % coma folders
+  +camping-list         1299 messages     0 unread     0 new
+  +lispmachines          121 messages     0 unread     0 new
+  ...
+
+Marking mails:
+
+  % coma mark unseen -seen
+  % coma mark 666 667 -flagged
+
+Reading attachments:
+
+  % coma show
+  From: Dyers Downin <XXX>
+  Subject: " "You shall judge for yourself. It is just as Harvey
+  To: Etchells Freid <XXX>
+  Date: Mon, 19 Jul 2010 09:12:01 +0200
+  
+  2 --image 19968B PNG 366x275 mousiness.png--
+  % coma att
+  1  multipart/mixed 27522B
+  2    image/png 19968B "mousiness.png"
+  % coma att 2
+  mousiness.png
+  % display mousiness.png
+  % coma att 2 - |lpr
+
+Scanning mail (like read, but don't change the current sequence):
+
+  % coma scan date   # sort by date
+  ...
+
+scan (and read) support various scan line formats, others can be
+implemented easily:
+
+  % coma scan "363 367 1133"        
+   363  2008-01-10  Jeremy McAnally    Keeping Camping going                      
+   367  2008-04-07  _why                   camping moved to github                
+  1133  2010-06-30  Magnus Holm        Access to github.com/camping               
+  % coma scan "363 367 1133" -fmt nmh
+   363  01/10  Jeremy McAnally    Keeping Camping going<<all, I'm not sure who Cam
+   367  04/07  _why               camping moved to github<<the better interest of 
+  1133  06/30  Magnus Holm        Access to github.com/camping<<I've converted the
+  % coma scan "363 367 1133" -fmt twoline
+   363 Keeping Camping going                      
+     S 2008-01-10 05:29  "Jeremy McAnally" <jeremymcanally@gmail.com>
+   367     camping moved to github                
+     S 2008-04-07 21:17  _why <why@whytheluckystiff.net>
+  1133 Access to github.com/camping               
+     S 2010-06-30 13:18  Magnus Holm <judofyr@gmail.com>
+  % coma scan "363 367 1133" -fmt 9fans  
+  
+  Keeping Camping going                                                           
+     363    Jeremy McAnally                        Thu, 10 Jan 2008 05:29:17 +0100
+     367    _why                                   Mon, 07 Apr 2008 21:17:01 +0200
+  
+  Access to github.com/camping                                                    
+    1133    Magnus Holm                            Wed, 30 Jun 2010 13:18:49 +0200
+  % coma scan "363 367 1133" -fmt mailx
+      363 Jeremy McAnally     Thu Jan 10 05:29 Keeping Camping going              
+      367 _why                Mon Apr 07 21:17     camping moved to github        
+     1133 Magnus Holm         Wed Jun 30 13:18 Access to github.com/camping       
+
 == Dependencies
 
-Just Ruby 1.8.
+Just Ruby 1.8 (and the included SDBM extension).
 
 External tools: file(1), w3m(1) for HTML mail display, identify(1) for
 images, mhbuild(1) to send MIME mail.
