@@ -73,6 +73,17 @@ end
 
 Msg = Struct.new(:file, :mid, :subj, :date, :from, :irt, :idx, :depth)
 class Msg
+  def self.parse(file)
+    email = MiniMime.new(File.read(file).gsub("\n", "\r\n"))
+    Msg.new(file,
+            email["message-id"],
+            email["subject"] || "(no subject)",
+            Time.parse(email["date"]).to_f,
+            email["from"],
+            email["in-reply-to"],
+            nil, 0)
+  end
+
   def flags
     file[/:2,([a-z]*)/i, 1].to_s.upcase
   end
@@ -105,13 +116,7 @@ def cmd_inc(*argv)
       Dir.foreach(fpath) { |file|
         next  if file =~ /\A\./
         email = MiniMime.new(File.read(File.join(fpath, file)).gsub("\n", "\r\n"))
-        msg = Msg.new(file,
-                      email["message-id"],
-                      email["subject"] || "(no subject)",
-                      Time.parse(email["date"]).to_f,
-                      email["from"],
-                      email["in-reply-to"],
-                      nil, 0)
+        msg = Msg.parse(File.join(fpath, file))
         cache[File.join(fpath,file)] = msg
         num += 1
         unread += 1  unless msg.flags =~ /S/
