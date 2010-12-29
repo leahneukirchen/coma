@@ -373,6 +373,16 @@ def expr(scanner, ctx, initial, opts)
       ctx['folder'] = folder  unless folder == "+"
 
       fpath = folder2path(folder)
+      if opts["save"] || opts["inc"]
+        begin
+          Dir.foreach(File.join(fpath, "/../new/")) { |file|
+            next  if file =~ /\A\./
+            File.rename "#{fpath}/../new/#{file}", "#{fpath}/#{file}:2,"
+          }
+        rescue Errno::ENOENT
+          abort "No such folder #{fpath}"
+        end
+      end
       Dir.foreach(fpath) { |file|
         next  if file =~ /\A\./
         next  unless File.file? File.join(fpath, file)
