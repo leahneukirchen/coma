@@ -10,6 +10,7 @@ class MiniMime
   def initialize(msg)
     @raw = msg
     @header, @body = @raw.split(/\A\r\n|\r\n\r\n/m, 2)
+    @body ||= ""
 
     @fields = {}
 
@@ -176,7 +177,10 @@ class MiniMime
           output = body
         end
 
-        output = Iconv.conv(encoding, opts["charset"], output)  if opts["charset"]
+        if opts["charset"]
+          output = Iconv.conv(encoding + "//IGNORE", opts["charset"], output)
+        end
+
         output
       when "html"
         IO.popen("w3m -dump -T text/html", "w+") { |pipe|

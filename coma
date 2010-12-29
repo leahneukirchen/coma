@@ -218,9 +218,9 @@ $now = Time.now
 def nicedate(t)
   if $now.year == t.year && $now.month == t.month
     if $now.day == t.day
-      t.strftime("%H:%M")
+      t.strftime("   %H:%M  ")
     else
-      t.strftime("%b %d")
+      t.strftime("%a %b %d")
     end
   else
     t.strftime("%Y-%m-%d")
@@ -456,8 +456,15 @@ def fmt_nmh(msg, cur, opts)
 end
 
 def nmhsubj(msg, width)
-  text = metamail(msg.file).sub(/.*?\n\n\S*/m, "").gsub(/\s+/, " ").lstrip
-  (msg.subj + "<<" + text + ">>").unpack("U*")[0, width].pack("U*").ljust(width)
+  begin
+    text = metamail(msg.file).sub(/.*?\n\n\S*/m, "").gsub(/\s+/, " ").lstrip
+  rescue
+    p $!
+    text = ""
+  end
+
+  (msg.subj + "<<" + text + ">>").unpack("U*")[0, width].pack("U*").ljust(width)\
+    rescue msg.subj[0, width].ljust(width)   # in case of invalid UTF-8
 end
 
 def fmt_twoline(msg, cur, opts)
