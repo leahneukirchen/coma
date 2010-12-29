@@ -302,7 +302,7 @@ def expr(scanner, ctx, initial, opts)
     elsif scanner.scan(/reverse/)
       reverse = !reverse
 
-    elsif scanner.scan(/(next|prev|cur|\.|first|last|all|thr|sub(?!ject)|[+-]?\d+)(:([+-]?(\d+)|thr|sub)|-(next|prev|cur|\.|first|last|all|(\d+)))?/)
+    elsif scanner.scan(/(next|prev|cur|\.|first|last|all|thr|sub(?!j)|[+-]?\d+)(:([+-]?(\d+)|thr|sub)|-(next|prev|cur|\.|first|last|all|(\d+)))?/)
 
       selected = []  if selected == :all
       [*ref2idx(ctx, scanner.matched)].each { |idx|
