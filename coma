@@ -757,17 +757,23 @@ def cmd_mail(*argv)
       if re['reply-to'] && !opts['noreplyto']
         to = re['reply-to'].to_s
       else
-        to = msg.irt
+        to = msg.from
       end
       opts['cc'] ||= [re['cc']]  unless opts['noreplyall'] || !re['cc']
       opts['subject'] = ["Re: " + strip_re(msg.subj)]
       irt = msg.mid
+
+      unless opts['noquote']
+        quote = metamail(file).split("\n\n", 2).last
+      end
+
     elsif opts['fwd']
       ref = opts['fwd'].first || "."
-      file, msg = ctx['seq'][ref2idx(ctx, ref)]
+      file = ctx['seq'][ref2idx(ctx, ref)-1]
+      msg = Msg::Cache[file]
       opts['subject'] = ["Fwd: " + strip_re(msg.subj)]
       from = msg.from
-      original_mail = metamail(file)
+      original_mail = File.read(file)
     end
 
     Tempfile.open("coma-mail") { |tmp|
@@ -780,12 +786,16 @@ def cmd_mail(*argv)
       tmp.puts(HEADER_SEP)
       tmp.puts
       begin
+        if quote
+          tmp.puts "#{msg.from} writes:"
+          tmp.puts
+          tmp.puts quote.gsub(/^/, "> ")
+        end
+
         if original_mail
-#          tmp.puts "----- Forwarded message from #{from} -----"
-          tmp.puts "#<message/rfc822 <>{inline}"
-          tmp.puts original_mail.gsub(/^#/, '##')
-          tmp.puts "#"
-#          tmp.puts "\n----- End forwarded message -----"
+          tmp.puts "#begin message/rfc822"
+          tmp.puts original_mail
+          tmp.puts "#end"
         end
 
         opts['att'].to_a.each { |att|
