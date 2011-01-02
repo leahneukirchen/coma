@@ -98,10 +98,13 @@ Msg = Struct.new(:file, :mid, :subj, :date, :from, :irt, :idx, :depth)
 class Msg
   def self.parse(file)
     email = MiniMime.new(File.read(file).gsub("\n", "\r\n"))
+
+    date = email["date"] ? Time.parse(email["date"]).to_f : File.mtime(file)
+
     Msg.new(file,
             email["message-id"],
             email["subject"] || "(no subject)",
-            Time.parse(email["date"]).to_f,
+            date,
             email["from"],
             email["in-reply-to"],
             nil, 0)
