@@ -24,10 +24,20 @@ Yet, coma also is a lot like MH:
 * it is a MUA only.  Mail delivery and transfer is the task of other
   tools.
 
+== Command-line parsing
+
+coma is a multi-call script that is executed like this:
+
+    % coma SUBCOMMAND ARGS... [-FLAG FLAGARGS...]...
+
+Note that, unlike most other Unix tools, the *main arguments come first*,
+and then the flags appear *with possibly several arguments*.  Consider:
+
+    % coma repl -cc foo@example.org bar@example.org -att *.c -noquote
+
 == Workflow
 
 How do you use coma?  The default workflow for coma works like this:
-XXX TODO mostly
 
 * You are bored and want to read mail, or your xlbiff pops up and
   shows an interesting message.
@@ -80,8 +90,6 @@ For content searches, I recommend using mairix:
 
   % coma
   Subcommands: att folders fwd inc mail mark next prev read repl scan show usage
-
-Dealing with attachments:
 
 Folder list:
 
