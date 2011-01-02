@@ -824,14 +824,7 @@ def cmd_mail(*argv)
       headers << "Message-Id: #{generate_mid(from)}\n"
       headers << "X-Mailer: coma/#{COMA_VERSION}\n"
 
-      if body =~ /^#/
-        IO.popen("mhbuild -", "w+") { |io|
-          io.write body
-          io.close_write
-          addheaders, body = io.read.split("\n\n", 2)
-          headers << addheaders
-        }
-      end
+      headers, body = makemime(headers, body)
 
       if opts['debug']
         puts headers
@@ -851,6 +844,77 @@ def cmd_mail(*argv)
   if opts['repl'] && !opts['keep']
     cmd_mark(opts['repl'].first || ".", "-replied")
   end
+end
+
+def generate_boundary
+  timestamp = (Time.now.to_f * 1000).to_i
+  random = rand(2**32)
+
+  "----#{timestamp.to_s(36)}-#{rand(2**32).to_s(36)}".upcase
+end
+
+def makemime(header, body)
+  boundary = generate_boundary
+
+  # Sanitize and encode headers.
+  header = header.split(/(\s+)/).map { |chunk|
+    if chunk =~ /[^\012\015\040-\176]/
+      "=?utf-8?Q?#{[chunk].pack("M*").gsub(/=\n\Z/, "")}?="
+    else
+      chunk
+    end
+  }.join
+  
+  mimebody = ""
+  if body =~ %r{(^##{TOKEN}/#{TOKEN}\s*.+|^#begin )}   # any MIME parts at all?
+    header << "Mime-Version: 1.0\n"
+    header << %Q{Content-Type: multipart/mixed; boundary="#{boundary}"\n}
+    
+    mimebody << body.split(%r{(^##{TOKEN}/#{TOKEN}\s*.+?\n|^#begin #{TOKEN}/#{TOKEN}.*?\n.*^#end\n)}m).map { |part|
+      next  if part == "" || part == "\n"
+
+      if part =~ %r{\A#(#{TOKEN}/#{TOKEN})\s*(.+)}
+        content_type = $1
+        content = open($2) { |input| input.read }
+        p content
+        disp = %{attachment; filename="#{File.basename($2).delete('"')}"}
+      elsif part =~ %r{\A#begin (#{TOKEN}/#{TOKEN}).*?\n(.*\n)#end\n}m
+        content_type = $1
+        content = $2
+        disp = "inline"
+      else                      # ordinary text
+        content_type = "text/plain; charset=utf-8"
+        content = part
+        disp = "inline"
+      end
+        
+      binary = content.count("^ -~", "^\r\n") / content.size > 0.3 ||
+        content.count("\x00") > 0
+        
+      if binary
+        part = [content].pack("m*")
+        cte = "base64"
+      elsif content =~ /[\200-\377]/ || content =~ /.{70}/
+        part = [content].pack("M*")
+        cte = "quoted-printable"
+      else
+        cte = "8bit"
+      end
+      
+      "--#{boundary}\nContent-Type: #{content_type}\nContent-Transfer-Encoding: #{cte}\nContent-Disposition: #{disp}\n\n#{content}\n"
+    }.join + "\n--#{boundary}--\n"
+  else
+    header << "Content-Type: text/plain; charset=utf-8\n"
+    
+    if body =~ /[\200-\377]/ || body =~ /.{70}/
+      body = [body].pack("M*")
+      header << "Content-Transfer-Encoding: quoted-printable\n"
+    end
+    
+    mimebody = body
+  end
+
+  [header, mimebody]
 end
 
 def cmd_repl(*argv)
