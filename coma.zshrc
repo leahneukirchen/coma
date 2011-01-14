@@ -5,7 +5,9 @@
 export LINES COLUMNS
 
 coma() {
-    ruby -I ~/prj/coma ~/prj/coma/coma "$@"
+    ruby -I/opt/ruby1.8/lib/ruby/gems/1.8/gems/ffi-0.6.3/lib/ \
+         -I/opt/ruby1.8/lib/ruby/gems/1.8/gems/rufus-tokyo-1.0.7/lib/ \
+         -I~/prj/coma ~/prj/coma/coma "$@"
 }
 alias ,="coma"
 alias s="coma show"

@@ -6,9 +6,25 @@ require 'fileutils'
 require 'strscan'
 require 'tempfile'
 require 'time'
-require 'sdbm'
 
 require 'minimime'
+
+begin
+  require 'rufus/tokyo'
+
+  # Fake the API we need.
+  class SDBM < Rufus::Tokyo::Cabinet
+    def initialize(path)
+      super(path, :type => :hash)
+    end
+
+    def fetch(key)
+      self[key] or raise IndexError, "key not found"
+    end
+  end
+rescue LoadError
+  require 'sdbm'
+end
 
 $MAILDIR_PREFIX = "~/Mail"
 
