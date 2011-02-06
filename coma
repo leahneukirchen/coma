@@ -329,6 +329,7 @@ def expr(scanner, ctx, initial, opts)
                 when "subj", "subject"; msg.subj
                 when "date"; pattern = Time.parse(pattern).to_f; msg.date
                 when "from"; msg.from
+                when "body"; metamail(msg.file)
                 else
                   raise "unknown field #{scanner[1].dump}, add code to load mail"
                 end
