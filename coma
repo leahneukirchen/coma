@@ -920,11 +920,14 @@ def makemime(header, body)
       "--#{boundary}\nContent-Type: #{content_type}\nContent-Transfer-Encoding: #{cte}\nContent-Disposition: #{disp}\n\n#{content}\n"
     }.join + "\n--#{boundary}--\n"
   else
-    header << "Content-Type: text/plain; charset=utf-8\n"
-    
     if body =~ /[\200-\377]/ || body =~ /.{70}/
       body = [body].pack("M*")
+      header << "Mime-Version: 1.0\n"
+      header << "Content-Type: text/plain; charset=utf-8\n"
       header << "Content-Transfer-Encoding: quoted-printable\n"
+      header << "Content-Disposition: inline\n"
+    else
+      header << "Content-Type: text/plain; charset=us-ascii\n"
     end
     
     mimebody = body
