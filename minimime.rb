@@ -65,7 +65,7 @@ class MiniMime
     _, _, opts = content_type
 
     @body.split("--#{opts["boundary"]}")[1...-1].map { |part|
-      MiniMime.new(part.sub("\r\n", ""))
+      MiniMime.new(part.sub("\r\n", "").sub(/\r\n$/, ""))
     }
   end
 
@@ -158,7 +158,7 @@ class MiniMime
         "--unhandled type #{self["content-type"]}--\n"
       end
     else
-      raise "can't deal with #{self["content-type"]}"
+      "--unhandled type #{self["content-type"]}--\n"
     end
   end
 
@@ -231,7 +231,7 @@ class MiniMime
         "--unhandled type #{self["content-type"]}--\n" + body
       end
     else
-      raise "can't deal with #{self["content-type"]}"
+      "--unhandled type #{self["content-type"]}--\n"
     end
   end
 end
