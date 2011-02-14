@@ -272,7 +272,7 @@ def select(ctx, opts)
   seq = ctx['seq']
 
   file2idx = {}
-  seq.each_with_index { |file, i| file2idx[file] = i }
+  seq.each_with_index { |file, i| file2idx[file] = i+1 }
 
   mid = Msg::Cache[seq[ctx['cur']-1]].mid  rescue nil
 
@@ -282,7 +282,7 @@ def select(ctx, opts)
 
   seq.each { |file| Msg::Cache[file].idx = file2idx[file] }
 
-  seq.each_with_index { |file, i|
+  seq.each { |file|
     msg = Msg::Cache[file]
     return [seq, msg.idx]  if msg.mid == mid
   }
@@ -440,7 +440,7 @@ def fmt_default(msg, cur, opts)
   width = opts['width'] ? opts['width'].first.to_i : term_width
   # timely-like single-line format
   if msg.idx
-    idx = msg.idx+1
+    idx = msg.idx
     flag = (msg.idx == cur ? "+" : nil)
   else
     idx = ''
@@ -460,7 +460,7 @@ def fmt_nmh(msg, cur, opts)
   width = opts['width'] ? opts['width'].first.to_i : term_width
   # timely-like single-line format
   if msg.idx
-    idx = msg.idx+1
+    idx = msg.idx
     flag = (msg.idx == cur ? "+" : nil)
   else
     idx = ''
@@ -489,7 +489,7 @@ end
 
 def fmt_twoline(msg, cur, opts)
   width = opts['width'] ? opts['width'].first.to_i : term_width
-  puts "%4d%s%s\n%4s %s  %s" % [msg.idx+1, (msg.idx+1 == cur ? "*" : " "),
+  puts "%4d%s%s\n%4s %s  %s" % [msg.idx, (msg.idx == cur ? "*" : " "),
                                     nicesubj(msg.subj, width-37, msg.depth),
                                     msg.flags,
                                     Time.at(msg.date).strftime("%Y-%m-%d %H:%M"),
@@ -503,7 +503,7 @@ def fmt_9fans(msg, cur, opts)
     puts  if msg.idx > 0
     puts nicesubj(msg.subj, width, msg.depth)
   end
-  puts "  %4d%s   %s %s" % [msg.idx+1, (msg.idx+1 == cur ? "*" : " "),
+  puts "  %4d%s   %s %s" % [msg.idx, (msg.idx == cur ? "*" : " "),
                             nicefrom(msg.from, width-42),
                             Time.at(msg.date).rfc2822]
 end
@@ -511,10 +511,10 @@ end
 # inspired by mailx
 def fmt_mailx(msg, cur, opts)
   width = opts['width'] ? opts['width'].first.to_i : term_width
-  puts "%s%s%s%4d %s   %s %s" % [msg.idx+1 == cur ? ">" : " ",
+  puts "%s%s%s%4d %s   %s %s" % [msg.idx == cur ? ">" : " ",
                                 msg.flags =~ /S/ ? " " : "N",
                                 msg.flags =~ /R/ ? "R" : " ",
-                                msg.idx+1,
+                                msg.idx,
                                 nicefrom(msg.from, 17),
                                 Time.at(msg.date).strftime("%a %b %02d %H:%M"),
                                 nicesubj(msg.subj, width-45, msg.depth)
@@ -533,7 +533,7 @@ def cmd_scan(*argv)
 
     if opts["save"]
       seq.each_with_index { |file, i|
-        Msg::Cache[file].idx = i
+        Msg::Cache[file].idx = i+1
         Msg::Cache[file] = Msg::Cache[file]  # force write
       }
       ctx['seq'] = seq
@@ -564,15 +564,16 @@ def ref2idx(ctx, ref)
   when /(.*):([+-]?)(\d+)\z/
     idx = ref2idx(ctx, $1)
     case $2
-    when "";  idx..idx+Integer($3)-1 #XXX not MH-style, depends on first/last
-    when "+"; idx..idx+Integer($3)-1
-    when "-"; idx-Integer($3)+1..idx
+    when "";  idx..idx+Integer($3) #XXX not MH-style, depends on first/last
+    when "+"; idx..idx+Integer($3)
+    when "-"; idx-Integer($3)..idx
     end
   when /.-./
     a, b = ref.split("-", 2)
     ref2idx(ctx, a)..ref2idx(ctx, b)
   when /\A[+-]\d+\z/
-    if ctx['seq'][(ctx['cur'] || 1) - 1 + Integer(ref)]
+    case ctx['cur'] + Integer(ref)
+    when 1..ctx['seq'].size
       ctx['cur'] + Integer(ref)
     else
       raise ArgumentError, "invalid reference"
@@ -594,11 +595,11 @@ def ref2idx(ctx, ref)
     ref2idx(ctx, "cur:thr")
   when /(.*):thr\z/
     start = ref2idx(ctx, $1)
-    while Msg::Cache[ctx['seq'][start-1]].depth > 0 && start >= 1
+    while start > 1 && Msg::Cache[ctx['seq'][start-1]].depth > 0
       start -= 1
     end
     stop = start+1
-    while Msg::Cache[ctx['seq'][stop-1]].depth != 0 && stop < ctx['seq'].size
+    while stop <= ctx['seq'].size && Msg::Cache[ctx['seq'][stop-1]].depth != 0
       stop += 1
     end
     start..stop-1
@@ -608,7 +609,7 @@ def ref2idx(ctx, ref)
     start = ref2idx(ctx, $1)
     depth = Msg::Cache[ctx['seq'][start-1]].depth
     stop = start + 1
-    while Msg::Cache[ctx['seq'][stop-1]].depth > depth && stop < ctx['seq'].size
+    while stop <= ctx['seq'].size && Msg::Cache[ctx['seq'][stop-1]].depth > depth
       stop += 1
     end
     start..stop-1
@@ -640,19 +641,19 @@ def cmd_show(*argv)
 
     seq.each_with_index { |file, i|
       msg = Msg::Cache[file]
-      ctx['cur'] = msg.idx+1  if msg.idx && !opts["keep"]
+      ctx['cur'] = msg.idx  if msg.idx && !opts["keep"]
       if opts['path']
         puts file
       elsif opts['raw']
         puts File.read(file)
       elsif opts['idx']
-        puts msg.idx+1
+        puts msg.idx
       elsif opts['select']
         # do nothing
       else
         puts "\C-l\n" + "#"*term_width  if i > 0
         puts metamail(file)
-        seen << (msg.idx+1).to_s  if msg.idx
+        seen << (msg.idx).to_s  if msg.idx
       end
     }
   }
