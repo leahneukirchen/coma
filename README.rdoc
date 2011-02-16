@@ -76,7 +76,7 @@ fields being cached:
 
 For content searches, I recommend using mairix:
 
-  % coma read $(mairix -r SEARCH TERMS)
+  % mairix -r SEARCH TERMS | coma read -
 
 == Sending mail
 

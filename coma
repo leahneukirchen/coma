@@ -434,6 +434,15 @@ def expr(scanner, ctx, initial, opts)
       using_initial = false
       seq = thread(seq, reverse)
 
+    elsif scanner.scan(/-/)
+      seq = []  if using_initial
+      warn "coma: Go ahead and enter mail filenames..."  if STDIN.tty?
+      while line = STDIN.gets
+        seq << Msg::Cache.from_file(line.chomp)
+      end
+      using_initial = false
+      seq
+
     elsif scanner.scan(/%(\S*)/)
       seq = []  if using_initial
 
