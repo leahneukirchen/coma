@@ -317,7 +317,7 @@ TOKEN = "[-#!$%&'*+.^_{}|\\w]+"
 def select(ctx, opts)
   seq = load_seq(default_seq)
 
-  mid = seq[ctx['cur']-1].mid  rescue nil
+  mid = seq[ctx["#{default_seq}-cur"]-1].mid  rescue nil
 
   id2idx = {}
   seq.each { |msg| id2idx[msg.id] = msg.idx }
@@ -584,7 +584,7 @@ def cmd_scan(*argv)
       if opts["save"].empty?
         seq.each_with_index { |msg, i| msg.idx = i+1 }
         save_seq(default_seq, seq)
-        ctx['cur'] = cur
+        ctx["#{default_seq}-cur"] = cur
       else
         save_seq(opts["save"].first, seq)
       end
@@ -631,9 +631,9 @@ def ref2idx(ctx, ref)
     a, b = ref.split("-", 2)
     ref2idx(ctx, a)..ref2idx(ctx, b)
   when /\A[+-]\d+\z/
-    case ctx['cur'] + Integer(ref)
+    case ctx["#{default_seq}-cur"] + Integer(ref)
     when 1..seq.size
-      ctx['cur'] + Integer(ref)
+      ctx["#{default_seq}-cur"] + Integer(ref)
     else
       raise ArgumentError, "invalid reference"
     end
@@ -699,7 +699,7 @@ def cmd_show(*argv)
     seq, cur = select(ctx, opts)
 
     seq.each_with_index { |msg, i|
-      ctx['cur'] = msg.idx  if msg.idx && !opts["keep"]
+      ctx["#{default_seq}-cur"] = msg.idx  if msg.idx && !opts["keep"]
       if opts['path']
         puts msg.file
       elsif opts['raw']
