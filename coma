@@ -412,6 +412,14 @@ def expr(scanner, ctx, initial, opts)
       using_initial = false
       seq = thread(seq, reverse)
 
+    elsif scanner.scan(/%(\S*)/)
+      seq = []  if using_initial
+
+      seq.concat load_seq(scanner[1])
+
+      using_initial = false
+      seq = thread(seq, reverse)
+
     elsif scanner.scan(/\|/)
       seq |= expr(scanner, ctx, initial, opts)
     elsif scanner.scan(/\&/)
@@ -569,9 +577,21 @@ def cmd_scan(*argv)
     seq, cur = select(ctx, opts)
 
     if opts["save"]
-      seq.each_with_index { |msg, i| msg.idx = i+1 }
-      save_seq("default", seq)
-      ctx['cur'] = cur
+      if opts["save"].empty?
+        seq.each_with_index { |msg, i| msg.idx = i+1 }
+        save_seq("default", seq)
+        ctx['cur'] = cur
+      else
+        save_seq(opts["save"].first, seq)
+      end
+    end
+
+    if opts["add"]
+      save_seq(opts["add"].first, load_seq(opts["add"].first) | seq)
+    end
+
+    if opts["delete"]
+      save_seq(opts["delete"].first, load_seq(opts["delete"].first) - seq)
     end
 
     unless opts["q"]
@@ -779,6 +799,28 @@ def cmd_folders(*argv)
     else
       puts "%-20s %5d messages %5d unread %5d new" % [f, num[folder], unread[folder], new[folder]]
     end
+  }
+end
+
+def cmd_seq(*argv)
+  opts = parse argv
+
+  if opts["clear"]
+    opts["clear"].each { |name|
+      begin
+        File.delete(File.expand_path("~/.config/coma/seq-#{name}"))
+      rescue Errno::ENOENT
+        warn "coma: no such sequence '#{name}'"
+      end
+    }
+    exit
+  end
+  
+  Dir.entries(File.expand_path("~/.config/coma")).sort.each { |f|
+    next  unless f =~ /^seq-/
+    name = $'
+
+    puts "%%%-14s %5d messages" % [name, load_seq(name).size]
   }
 end
 

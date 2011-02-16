@@ -156,6 +156,20 @@ implemented easily:
       367 _why                Mon Apr 07 21:17     camping moved to github        
      1133 Magnus Holm         Wed Jun 30 13:18 Access to github.com/camping       
 
+Working with sequences: Sequences are refered to in the query language
+as "%sequencename".  By default, you operate on the sequence "%default".
+You can list sequences with "coma seq":
+
+  % , seq         
+  %default         1250 messages
+  %ten               10 messages
+  %y                 14 messages
+
+Sequences are created with "coma scan ... -save sequencename", and can
+be deleted with "coma seq -clear sequencename...".  You can add mails
+to a sequence with "coma scan ... -add sequencename" or remove mails
+with "coma scan ... -delete sequencename".
+
 == Dependencies
 
 Ruby 1.8 and sqlite3.
