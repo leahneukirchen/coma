@@ -111,7 +111,7 @@ class SqliteCache
     @inner_cache = {}
     @db = SQLite3::Database.new(File.expand_path("~/.config/coma/cache.db"))
 
-    @db.execute(<<EOF)
+    @db.execute_batch(<<EOF)
 CREATE TABLE IF NOT EXISTS mails (
   id TEXT PRIMARY KEY,
   file TEXT,
@@ -121,6 +121,7 @@ CREATE TABLE IF NOT EXISTS mails (
   frm TEXT,
   irt TEXT
 );
+CREATE INDEX IF NOT EXISTS mails_file ON mails (file);
 EOF
 
     @db.execute("BEGIN TRANSACTION")
