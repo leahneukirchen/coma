@@ -699,6 +699,8 @@ def cmd_show(*argv)
   with_context { |ctx|
     seq, cur = select(ctx, opts)
 
+    min_depth = seq.map { |msg| msg.depth }.min
+
     seq.each_with_index { |msg, i|
       ctx["#{default_seq}-cur"] = msg.idx  if msg.idx && !opts["keep"]
       if opts['path']
@@ -709,6 +711,12 @@ def cmd_show(*argv)
         puts msg.idx
       elsif opts['select']
         # do nothing
+      elsif opts['wide']
+        puts if i > 0
+        text = metamail(msg.file)
+        text.gsub!(/^/, "  " * (msg.depth-min_depth) + "| ").sub(/\|/, "*")
+        puts text
+        seen << (msg.idx).to_s  if msg.idx
       else
         puts "\C-l\n" + "#"*term_width  if i > 0
         puts metamail(msg.file)
