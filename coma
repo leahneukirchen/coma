@@ -735,8 +735,8 @@ def cmd_att(*argv)
   seq = load_seq(default_seq)
 
   with_context { |ctx|
-    file = seq[ctx['cur'] - 1]
-    text = File.read(file)
+    msg = seq[ctx["#{default_seq}-cur"] - 1]
+    text = File.read(msg.file)
     # Unix to Internet line conversion.
     text.gsub!("\n", "\r\n")  unless text =~ /\r\n[\t ]*\r\n/m
 
