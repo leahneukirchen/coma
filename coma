@@ -81,6 +81,10 @@ def save_seq(name, seq)
   }
 end
 
+def default_seq
+  ENV["COMASEQ"] || "default"
+end
+
 def term_width
   # XXX stty would be better; good enough with urxvt/xterm, bash/zsh
   ENV["COLUMNS"].to_i.nonzero? || 80
@@ -311,7 +315,7 @@ end
 
 TOKEN = "[-#!$%&'*+.^_{}|\\w]+"
 def select(ctx, opts)
-  seq = load_seq("default")
+  seq = load_seq(default_seq)
 
   mid = seq[ctx['cur']-1].mid  rescue nil
 
@@ -579,7 +583,7 @@ def cmd_scan(*argv)
     if opts["save"]
       if opts["save"].empty?
         seq.each_with_index { |msg, i| msg.idx = i+1 }
-        save_seq("default", seq)
+        save_seq(default_seq, seq)
         ctx['cur'] = cur
       else
         save_seq(opts["save"].first, seq)
@@ -604,7 +608,7 @@ def cmd_scan(*argv)
 end
 
 def ref2idx(ctx, ref)
-  seq = load_seq("default")
+  seq = load_seq(default_seq)
 
   case ref
   when "next"
@@ -728,7 +732,7 @@ end
 def cmd_att(*argv)
   opts = parse argv
 
-  seq = load_seq("default")
+  seq = load_seq(default_seq)
 
   with_context { |ctx|
     file = seq[ctx['cur'] - 1]
@@ -843,7 +847,7 @@ def cmd_mail(*argv)
   opts = parse argv
   to = (opts['args'] + opts['to'].to_a).join(", ")
 
-  seq = load_seq("default")
+  seq = load_seq(default_seq)
 
   with_context { |ctx|
     if opts['repl']

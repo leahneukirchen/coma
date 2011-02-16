@@ -157,10 +157,11 @@ implemented easily:
      1133 Magnus Holm         Wed Jun 30 13:18 Access to github.com/camping       
 
 Working with sequences: Sequences are refered to in the query language
-as "%sequencename".  By default, you operate on the sequence "%default".
-You can list sequences with "coma seq":
+as "%sequencename".  By default, you operate on the sequence
+"%default" (or $COMASEQ if set).  You can list sequences with
+"coma seq":
 
-  % , seq         
+  % coma seq         
   %default         1250 messages
   %ten               10 messages
   %y                 14 messages
