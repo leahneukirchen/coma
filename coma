@@ -323,7 +323,24 @@ def select(ctx, opts)
   id2idx = {}
   seq.each { |msg| id2idx[msg.id] = msg.idx }
 
-  scanner = StringScanner.new(opts["args"].join(" "))
+  query = opts["args"].join(" ")
+
+  begin
+    aliases = {}
+    IO.foreach(File.expand_path("~/.config/coma/config")).each { |line|
+      name, value = line.split(":", 2)
+      if name =~ /^%/
+        aliases[name] = value.strip
+      end
+    }
+    while query.gsub!(/%[\w-]+/) { " #{aliases[$&]} " || $& }
+      # spin
+    end
+  rescue Errno::ENOENT
+    # ignore
+  end
+
+  scanner = StringScanner.new(query)
   seq = expr(scanner, ctx, seq.dup, opts)
   scanner.eos?  or raise "trailing junk"
 
