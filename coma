@@ -315,9 +315,14 @@ def select(ctx, opts)
 
   mid = seq[ctx['cur']-1].mid  rescue nil
 
+  id2idx = {}
+  seq.each { |msg| id2idx[msg.id] = msg.idx }
+
   scanner = StringScanner.new(opts["args"].join(" "))
   seq = expr(scanner, ctx, seq.dup, opts)
   scanner.eos?  or raise "trailing junk"
+
+  seq.each { |msg| msg.idx = id2idx[msg.id] }  # restore idx
 
   seq.each { |msg|
     return [seq, msg.idx]  if msg.mid == mid
