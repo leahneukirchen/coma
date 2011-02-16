@@ -53,7 +53,8 @@ def load_seq(name)
     seq = File.open(File.expand_path("~/.config/coma/seq-#{name}")) { |f|
       Marshal.load(f)
     }
-  rescue #XXX qualify
+  rescue Errno::ENOENT
+    warn "coma: no such sequence '#{name}'"
     seq = []
   end
   i = 1
@@ -395,7 +396,7 @@ def expr(scanner, ctx, initial, opts)
             File.rename "#{fpath}/../new/#{file}", "#{fpath}/#{file}:2,"
           }
         rescue Errno::ENOENT
-          abort "No such folder #{fpath}"
+          abort "coma: no such folder #{fpath}"
         end
       end
       Dir.foreach(fpath) { |file|
