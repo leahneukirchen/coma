@@ -7,24 +7,9 @@ require 'strscan'
 require 'tempfile'
 require 'time'
 
+require 'sqlite3'
+
 require 'minimime'
-
-begin
-  require 'rufus/tokyo'
-
-  # Fake the API we need.
-  class SDBM < Rufus::Tokyo::Cabinet
-    def initialize(path)
-      super(path, :type => :hash)
-    end
-
-    def fetch(key)
-      self[key] or raise IndexError, "key not found"
-    end
-  end
-rescue LoadError
-  require 'sdbm'
-end
 
 $MAILDIR_PREFIX = "~/Mail"
 
@@ -63,6 +48,38 @@ def contextfile
   File.expand_path("~/.config/coma/context")
 end
 
+def load_seq(name)
+  begin
+    seq = File.open(File.expand_path("~/.config/coma/seq-#{name}")) { |f|
+      Marshal.load(f)
+    }
+  rescue #XXX qualify
+    seq = []
+  end
+  i = 1
+  seq.map { |(id, depth)|
+    begin
+      msg = Msg::Cache[id]
+      msg.idx = i
+      msg.depth = depth
+      
+      i+=1
+      msg
+    rescue Errno::ENOENT
+      nil
+    end
+  }.compact
+end
+
+def save_seq(name, seq)
+  File.open(File.expand_path("~/.config/coma/seq-#{name}"), "w") { |f|
+    d = seq.map { |msg|
+      [msg.id, msg.depth]
+    }
+    Marshal.dump(d, f)
+  }
+end
+
 def term_width
   # XXX stty would be better; good enough with urxvt/xterm, bash/zsh
   ENV["COLUMNS"].to_i.nonzero? || 80
@@ -84,40 +101,63 @@ def parse(argv)
   opts
 end
 
-class PersistentCache
-  def initialize(file)
+class SqliteCache
+  def initialize
     @inner_cache = {}
-    @cache = SDBM.new(file)
+    @db = SQLite3::Database.new(File.expand_path("~/.config/coma/cache.db"))
+
+    @db.execute(<<EOF)
+CREATE TABLE IF NOT EXISTS mails (
+  id TEXT PRIMARY KEY,
+  file TEXT,
+  mid TEXT,
+  subject TEXT,
+  date DATETIME,
+  frm TEXT,
+  irt TEXT
+);
+EOF
+
+    @db.execute("BEGIN TRANSACTION")
+    at_exit { @db.execute("COMMIT") }
   end
 
-  def []=(key, value)
-    @cache[key] = Marshal.dump(value)
+  def save(msg)
+    @db.execute("INSERT OR REPLACE INTO mails VALUES (?,?,?,?,?,?,?)",
+                msg.id, msg.file, msg.mid, msg.subj, msg.date, msg.from, msg.irt)
   end
 
   def [](key)
-    @inner_cache[key] ||= Marshal.load(@cache.fetch(key))
-  rescue IndexError
-    begin
-      self[key] = Msg.parse(key)
-    rescue Errno::ENOENT
-      nil
+    @inner_cache[key] ||=
+      Msg.new(*@db.get_first_row("SELECT * FROM mails WHERE id = ?", key))
+  end
+
+  def from_file(key)
+    rec = @db.get_first_row("SELECT * FROM mails WHERE file = ?", key)
+    if rec
+      Msg.new(*rec)
+    else
+      msg = Msg.parse(key)
+      save msg
+      msg
     end
   end
 
   def delete(key)
+    @db.execute("DELETE FROM mails WHERE id = ?", key)
     @inner_cache.delete key
-    @cache.delete key
   end
 end
 
-Msg = Struct.new(:file, :mid, :subj, :date, :from, :irt, :idx, :depth)
+Msg = Struct.new(:id, :file, :mid, :subj, :date, :from, :irt, :idx, :depth)
 class Msg
   def self.parse(file)
     email = MiniMime.new(File.read(file).gsub("\n", "\r\n"))
 
-    date = email["date"] ? Time.parse(email["date"]).to_f : File.mtime(file)
+    date = email["date"] ? Time.parse(email["date"]).to_f : File.mtime(file).to_f
 
-    Msg.new(file,
+    Msg.new(file.gsub(/:2,*$/, ''),
+            file,
             email["message-id"],
             email["subject"] || "(no subject)",
             date,
@@ -127,21 +167,20 @@ class Msg
   end
 
   def flags
-    file[/:2,([a-z]*)/i, 1].to_s.upcase
+    file[/:2,([a-z]*)$/i, 1].to_s.upcase
   end
 
   def flags=(newflags)
-    self.file = file.gsub(/:2,([a-z]*)/i, ":2,#{newflags}")
+    self.file = file.gsub(/:2,([a-z]*)$/i, ":2,#{newflags}")
   end
 
-  Cache = PersistentCache.new(File.expand_path("~/.config/coma/headercache"))
+  Cache = SqliteCache.new
 end
 
 # based on mhthread, mostly works
 # 24aug2010  +chris+
 def thread(seq, reverse)
-  mails = seq.map { |file|
-    msg = Msg::Cache[file]
+  mails = seq.map { |msg|
     re_in_subj = false
     sortsubj = msg.subj.strip.gsub(/^(re\[\d+\][:;]\s*)+/i) {
       re_in_subj = true
@@ -150,7 +189,8 @@ def thread(seq, reverse)
 
     {:mid => msg.mid, :subj => sortsubj, :orig_subj => msg.subj,
       :re_in_subj => re_in_subj, :irt => msg.irt, :date => msg.date,
-      :from => msg.from, :file => file, :flags => msg.flags, :idx => msg.idx
+      :from => msg.from, :id => msg.id,
+      :file => msg.file, :flags => msg.flags, :idx => msg.idx
     }
   }
 
@@ -215,8 +255,9 @@ def thread(seq, reverse)
 
   sorted = []
   rec = lambda { |level, mid, msg|
-    sorted << msg[:file]
-    Msg::Cache[msg[:file]].depth = level
+    m = Msg::Cache[msg[:id]]
+    m.depth = level
+    sorted << m
     tree[mid].keys.sort_by { |a| mid2msg[a][:date] }.each { |kid|
       rec[level+1, kid, tree[mid][kid]]
     }
@@ -269,21 +310,15 @@ end
 
 TOKEN = "[-#!$%&'*+.^_{}|\\w]+"
 def select(ctx, opts)
-  seq = ctx['seq']
+  seq = load_seq("default")
 
-  file2idx = {}
-  seq.each_with_index { |file, i| file2idx[file] = i+1 }
-
-  mid = Msg::Cache[seq[ctx['cur']-1]].mid  rescue nil
+  mid = seq[ctx['cur']-1].mid  rescue nil
 
   scanner = StringScanner.new(opts["args"].join(" "))
   seq = expr(scanner, ctx, seq.dup, opts)
   scanner.eos?  or raise "trailing junk"
 
-  seq.each { |file| Msg::Cache[file].idx = file2idx[file] }
-
-  seq.each { |file|
-    msg = Msg::Cache[file]
+  seq.each { |msg|
     return [seq, msg.idx]  if msg.mid == mid
   }
 
@@ -322,8 +357,7 @@ def expr(scanner, ctx, initial, opts)
       }
 
     elsif scanner.scan(/(#{TOKEN})([:~<>=])(?:('([^']*)'|#{TOKEN}))/)
-      seq = seq.find_all { |file|
-        msg = Msg::Cache[file]
+      seq = seq.find_all { |msg|
         pattern = scanner[4] || scanner[3]
         field = case scanner[1]
                 when "subj", "subject"; msg.subj
@@ -367,7 +401,7 @@ def expr(scanner, ctx, initial, opts)
       Dir.foreach(fpath) { |file|
         next  if file =~ /\A\./
         next  unless File.file? File.join(fpath, file)
-        seq << File.join(fpath, file)
+        seq << Msg::Cache.from_file(File.join(fpath, file))
       }
       using_initial = false
       seq = thread(seq, reverse)
@@ -380,21 +414,20 @@ def expr(scanner, ctx, initial, opts)
       seq -= expr(scanner, ctx, initial, opts)
 
     elsif scanner.scan(/flagged/)
-      seq = seq.find_all { |file| Msg::Cache[file].flags =~ /F/ }
+      seq = seq.find_all { |msg| msg.flags =~ /F/ }
     elsif scanner.scan(/unflagged/)
-      seq = seq.find_all { |file| Msg::Cache[file].flags !~ /F/ }
+      seq = seq.find_all { |msg| msg.flags !~ /F/ }
     elsif scanner.scan(/seen/)
-      seq = seq.find_all { |file| Msg::Cache[file].flags =~ /S/ }
+      seq = seq.find_all { |msg| msg.flags =~ /S/ }
     elsif scanner.scan(/unseen/)
-      seq = seq.find_all { |file| Msg::Cache[file].flags !~ /S/ }
+      seq = seq.find_all { |msg| msg.flags !~ /S/ }
     elsif scanner.scan(/replied/)
-      seq = seq.find_all { |file| Msg::Cache[file].flags =~ /R/ }
+      seq = seq.find_all { |msg| msg.flags =~ /R/ }
     elsif scanner.scan(/unreplied/)
-      seq = seq.find_all { |file| Msg::Cache[file].flags !~ /R/ }
+      seq = seq.find_all { |msg| msg.flags !~ /R/ }
 
     elsif scanner.scan(/subject/)
-      seq = seq.sort_by { |file|
-        msg = Msg::Cache[file]
+      seq = seq.sort_by { |msg|
         msg.depth = 0  # reset depth
         [opts['limit'] ? msg.date.to_i/(24*60*60*opts['limit'].first.to_i) : 0,
          strip_re(msg.subj),
@@ -402,15 +435,13 @@ def expr(scanner, ctx, initial, opts)
       }
       seq.reverse!  if reverse
     elsif scanner.scan(/date/)
-      seq = seq.sort_by { |file|
-        msg = Msg::Cache[file]
+      seq = seq.sort_by { |msg|
         msg.depth = 0  # reset depth
         msg.date
       }
       seq.reverse!  if reverse
     elsif scanner.scan(/from/)
-      seq = seq.sort_by { |file|
-        msg = Msg::Cache[file]
+      seq = seq.sort_by { |msg|
         msg.depth = 0  # reset depth
         [opts['limit'] ? msg.date.to_i/(24*60*60*opts['limit'].first.to_i) : 0,
          msg.from,
@@ -532,17 +563,13 @@ def cmd_scan(*argv)
     seq, cur = select(ctx, opts)
 
     if opts["save"]
-      seq.each_with_index { |file, i|
-        Msg::Cache[file].idx = i+1
-        Msg::Cache[file] = Msg::Cache[file]  # force write
-      }
-      ctx['seq'] = seq
+      seq.each_with_index { |msg, i| msg.idx = i+1 }
+      save_seq("default", seq)
       ctx['cur'] = cur
     end
 
     unless opts["q"]
-      seq.each { |file|
-        msg = Msg::Cache[file]
+      seq.each { |msg|
         send("fmt_#{opts["fmt"] ? opts["fmt"].first : "default"}",
              msg, cur, opts)
       }
@@ -551,6 +578,8 @@ def cmd_scan(*argv)
 end
 
 def ref2idx(ctx, ref)
+  seq = load_seq("default")
+
   case ref
   when "next"
     ref = "+1"
@@ -573,14 +602,14 @@ def ref2idx(ctx, ref)
     ref2idx(ctx, a)..ref2idx(ctx, b)
   when /\A[+-]\d+\z/
     case ctx['cur'] + Integer(ref)
-    when 1..ctx['seq'].size
+    when 1..seq.size
       ctx['cur'] + Integer(ref)
     else
       raise ArgumentError, "invalid reference"
     end
   when /\A\d+\z/
     idx = Integer(ref)
-    if idx > ctx['seq'].size
+    if idx > seq.size
       raise ArgumentError, "no message #{idx}"
     else
       idx
@@ -588,18 +617,18 @@ def ref2idx(ctx, ref)
   when "first"
     1
   when "last"
-    ctx['seq'].size
+    seq.size
   when "all"
-    1..ctx['seq'].size
+    1..seq.size
   when "thr"
     ref2idx(ctx, "cur:thr")
   when /(.*):thr\z/
     start = ref2idx(ctx, $1)
-    while start > 1 && Msg::Cache[ctx['seq'][start-1]].depth > 0
+    while start > 1 && seq[start-1].depth > 0
       start -= 1
     end
     stop = start+1
-    while stop <= ctx['seq'].size && Msg::Cache[ctx['seq'][stop-1]].depth != 0
+    while stop <= seq.size && seq[stop-1].depth != 0
       stop += 1
     end
     start..stop-1
@@ -607,9 +636,9 @@ def ref2idx(ctx, ref)
     ref2idx(ctx, "cur:sub")
   when /(.*):sub\z/
     start = ref2idx(ctx, $1)
-    depth = Msg::Cache[ctx['seq'][start-1]].depth
+    depth = seq[start-1].depth
     stop = start + 1
-    while stop <= ctx['seq'].size && Msg::Cache[ctx['seq'][stop-1]].depth > depth
+    while stop <= seq.size && seq[stop-1].depth > depth
       stop += 1
     end
     start..stop-1
@@ -639,20 +668,19 @@ def cmd_show(*argv)
   with_context { |ctx|
     seq, cur = select(ctx, opts)
 
-    seq.each_with_index { |file, i|
-      msg = Msg::Cache[file]
+    seq.each_with_index { |msg, i|
       ctx['cur'] = msg.idx  if msg.idx && !opts["keep"]
       if opts['path']
-        puts file
+        puts msg.file
       elsif opts['raw']
-        puts File.read(file)
+        puts File.read(msg.file)
       elsif opts['idx']
         puts msg.idx
       elsif opts['select']
         # do nothing
       else
         puts "\C-l\n" + "#"*term_width  if i > 0
-        puts metamail(file)
+        puts metamail(msg.file)
         seen << (msg.idx).to_s  if msg.idx
       end
     }
@@ -674,8 +702,10 @@ end
 def cmd_att(*argv)
   opts = parse argv
 
+  seq = load_seq("default")
+
   with_context { |ctx|
-    file = ctx['seq'][ctx['cur'] - 1]
+    file = seq[ctx['cur'] - 1]
     text = File.read(file)
     # Unix to Internet line conversion.
     text.gsub!("\n", "\r\n")  unless text =~ /\r\n[\t ]*\r\n/m
@@ -765,11 +795,12 @@ def cmd_mail(*argv)
   opts = parse argv
   to = (opts['args'] + opts['to'].to_a).join(", ")
 
+  seq = load_seq("default")
+
   with_context { |ctx|
     if opts['repl']
       ref = opts['repl'].first || "."
-      file = ctx['seq'][ref2idx(ctx, ref) - 1]
-      msg = Msg::Cache[file]
+      msg = seq[ref2idx(ctx, ref) - 1]
 
       re = MiniMime.new(File.read(file).gsub("\n", "\r\n"))
       if re['reply-to'] && !opts['noreplyto']
@@ -787,8 +818,7 @@ def cmd_mail(*argv)
 
     elsif opts['fwd']
       ref = opts['fwd'].first || "."
-      file = ctx['seq'][ref2idx(ctx, ref)-1]
-      msg = Msg::Cache[file]
+      msg = seq[ref2idx(ctx, ref)-1]
       opts['subject'] = ["Fwd: " + strip_re(msg.subj)]
       from = msg.from
       original_mail = File.read(file)
@@ -894,7 +924,6 @@ def makemime(header, body)
       if part =~ %r{\A#(#{TOKEN}/#{TOKEN})\s*(.+)}
         content_type = $1
         content = open($2) { |input| input.read }
-        p content
         disp = %{attachment; filename="#{File.basename($2).delete('"')}"}
       elsif part =~ %r{\A#begin (#{TOKEN}/#{TOKEN}).*?\n(.*\n)#end\n}m
         content_type = $1
@@ -951,8 +980,7 @@ def cmd_mark(*argv)
 
   with_context { |ctx|
     seq, cur = select(ctx, opts)
-    seq.each_with_index { |ofile, i|
-      msg = Msg::Cache[ofile]
+    seq.each_with_index { |msg, i|
       file = msg.file.dup
       flags = msg.flags.split(//)
 
@@ -968,10 +996,7 @@ def cmd_mark(*argv)
       next  if file == msg.file
 
       File.rename file, msg.file
-      Msg::Cache[msg.file.dup] = msg
-      Msg::Cache.delete file
-
-      ofile.replace msg.file   # this updates the ctx!
+      Msg::Cache.save msg  # update db
     }
   }
 end

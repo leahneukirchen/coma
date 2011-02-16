@@ -158,9 +158,7 @@ implemented easily:
 
 == Dependencies
 
-Ruby 1.8 and rufus-tokyo (strongly recommended, else it will fallback
-to the included SDBM extension which significantly (~100x) wastes
-disk-space for the cache).
+Ruby 1.8 and sqlite3.
 
 External tools: file(1), w3m(1) for HTML mail display, identify(1) for
 images.
