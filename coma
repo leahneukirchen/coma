@@ -98,6 +98,16 @@ def parse(argv, cmd, flags)
   end
   opts = {def_opt => []}
 
+  begin
+    IO.foreach(File.expand_path("~/.config/coma/config")).each { |line|
+      name, value = line.split(":", 2)
+      if name =~ /^#{Regexp.quote cmd}:/
+        argv.unshift(*value.split)
+      end
+    }
+  rescue Errno::ENOENT
+  end
+
   until argv.empty?
     case arg = argv.shift
     when "-h", "-help", "--help"
@@ -1127,6 +1137,19 @@ def cmd_usage(argv)
 end
 
 command = ARGV.first || 'usage'
-if defined?("cmd_#{command}")
+if respond_to?("cmd_#{command}")
   send "cmd_#{command}", ARGV[1..-1]
+else
+  addargs = []
+  begin
+    IO.foreach(File.expand_path("~/.config/coma/config")).each { |line|
+      name, value = line.split(":", 2)
+      if name =~ /^#{Regexp.quote command}:/
+        addargs = value.split
+      end
+    }
+  rescue Errno::ENOENT
+  end
+
+  exec "coma-#{command}", *(addargs + ARGV[1..-1])
 end
