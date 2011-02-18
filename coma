@@ -449,7 +449,7 @@ def expr(scanner, ctx, initial, opts)
       else
         fpath = folder2path(folder)
 
-        if opts["inc"] || opts["save"] == []   # on inc, read
+        if opts["inc"] || opts["save"] == "."   # on inc, read
           begin
             Dir.foreach(File.join(fpath, "/../new/")) { |file|
               next  if file =~ /\A\./
@@ -633,7 +633,7 @@ def fmt_mailx(msg, cur, opts)
 end
 
 def cmd_scan(argv, cmd="scan")
-  opts = parse(argv, cmd, %w[reverse last: limit: cached
+  opts = parse(argv, cmd, %w[reverse last: limit: cached inc
                              save: add: delete: q fmt: width:])
 
   with_context { |ctx|

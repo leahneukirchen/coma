@@ -235,5 +235,3 @@ class MiniMime
     end
   end
 end
-
-

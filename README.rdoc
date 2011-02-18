@@ -30,8 +30,7 @@ coma is a multi-call script that is executed like this:
 
     % coma SUBCOMMAND ARGS... [-FLAG FLAGARGS...]...
 
-Note that, unlike most other Unix tools, the *main arguments come first*,
-and then the flags appear *with possibly several arguments*.  Consider:
+Note that some flags have *possibly several arguments*.  Consider:
 
     % coma repl -cc foo@example.org bar@example.org -att *.c -noquote
 
@@ -159,15 +158,15 @@ implemented easily:
 Working with sequences: Sequences are refered to in the query language
 as "%sequencename".  By default, you operate on the sequence
 "%default" (or $COMASEQ if set).  You can list sequences with
-"coma seq":
+"coma seqs":
 
-  % coma seq         
+  % coma seqs
   %default         1250 messages
   %ten               10 messages
   %y                 14 messages
 
 Sequences are created with "coma scan ... -save sequencename", and can
-be deleted with "coma seq -clear sequencename...".  You can add mails
+be deleted with "coma seqs -clear sequencename...".  You can add mails
 to a sequence with "coma scan ... -add sequencename" or remove mails
 with "coma scan ... -delete sequencename".
 
