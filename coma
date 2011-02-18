@@ -90,19 +90,37 @@ def term_width
   ENV["COLUMNS"].to_i.nonzero? || 80
 end
 
-def parse(argv)
-  opt = "args"
-  opts = {"args" => []}
+def parse(argv, cmd, flags)
+  if flags.first =~ /\.\.\.$/
+    def_opt = $`
+  else
+    def_opt = "args"
+  end
+  opts = {def_opt => []}
 
-  argv.each { |arg|
-    if arg =~ /\A-(?=.)(?!\d)/
-      opt = $'
-      opts[opt] = []
+  until argv.empty?
+    case arg = argv.shift
+    when "-h", "-help", "--help"
+      warn "Usage: #{cmd} [switches]\n  switches are: \n  -" +
+        flags.join("\n  -")
+      exit
+    when /\A-(?=.)(?!\d)/
+      flag = $'
+      if flags.include?(flag)
+        opts[flag] = true
+      elsif flags.include?(flag + ":")
+        opts[flag] = argv.shift
+      elsif flags.include?(flag + "...")
+        def_opt = flag
+        opts[def_opt] ||= []
+      else
+        abort "invalid flag '#{arg}'"
+      end
     else
-      opts[opt] << arg
+      opts[def_opt] << arg
     end
-  }
-
+  end
+  
   opts
 end
 
@@ -491,7 +509,7 @@ def expr(scanner, ctx, initial, opts)
     elsif scanner.scan(/subject/)
       seq = seq.sort_by { |msg|
         msg.depth = 0  # reset depth
-        [opts['limit'] ? msg.date.to_i/(24*60*60*opts['limit'].first.to_i) : 0,
+        [opts['limit'] ? msg.date.to_i/(24*60*60*opts['limit'].to_i) : 0,
          strip_re(msg.subj),
          msg.date]
       }
@@ -505,7 +523,7 @@ def expr(scanner, ctx, initial, opts)
     elsif scanner.scan(/from/)
       seq = seq.sort_by { |msg|
         msg.depth = 0  # reset depth
-        [opts['limit'] ? msg.date.to_i/(24*60*60*opts['limit'].first.to_i) : 0,
+        [opts['limit'] ? msg.date.to_i/(24*60*60*opts['limit'].to_i) : 0,
          msg.from,
          msg.date]
       }
@@ -515,7 +533,7 @@ def expr(scanner, ctx, initial, opts)
     end
   end
   
-  seq = seq[-Integer(opts['last'].first || 20)..-1]  if opts['last']
+  seq = seq[-Integer(opts['last'] || 20)..-1]  if opts['last']
 
   if selected == :all
     seq
@@ -524,13 +542,13 @@ def expr(scanner, ctx, initial, opts)
   end
 end
 
-def cmd_read(*argv)
-  cmd_scan(*(argv << "-save"))
+def cmd_read(argv)
+  cmd_scan(argv << "-save" << "." << "-inc", "read")
 end
 
 # This is roughly scan.YYYYMMDD
 def fmt_default(msg, cur, opts)
-  width = opts['width'] ? opts['width'].first.to_i : term_width
+  width = opts['width'] ? opts['width'].to_i : term_width
   # timely-like single-line format
   if msg.idx
     idx = msg.idx
@@ -550,7 +568,7 @@ end
 
 # the original nmh format
 def fmt_nmh(msg, cur, opts)
-  width = opts['width'] ? opts['width'].first.to_i : term_width
+  width = opts['width'] ? opts['width'].to_i : term_width
   # timely-like single-line format
   if msg.idx
     idx = msg.idx
@@ -581,7 +599,7 @@ def nmhsubj(msg, width)
 end
 
 def fmt_twoline(msg, cur, opts)
-  width = opts['width'] ? opts['width'].first.to_i : term_width
+  width = opts['width'] ? opts['width'].to_i : term_width
   puts "%4d%s%s\n%4s %s  %s" % [msg.idx, (msg.idx == cur ? "*" : " "),
                                     nicesubj(msg.subj, width-37, msg.depth),
                                     msg.flags,
@@ -591,7 +609,7 @@ end
 
 # inspired by 9fans.net/archive
 def fmt_9fans(msg, cur, opts)
-  width = opts['width'] ? opts['width'].first.to_i : term_width
+  width = opts['width'] ? opts['width'].to_i : term_width
   if msg.depth == 0
     puts  if msg.idx > 0
     puts nicesubj(msg.subj, width, msg.depth)
@@ -603,7 +621,7 @@ end
 
 # inspired by mailx
 def fmt_mailx(msg, cur, opts)
-  width = opts['width'] ? opts['width'].first.to_i : term_width
+  width = opts['width'] ? opts['width'].to_i : term_width
   puts "%s%s%s%4d %s   %s %s" % [msg.idx == cur ? ">" : " ",
                                 msg.flags =~ /S/ ? " " : "N",
                                 msg.flags =~ /R/ ? "R" : " ",
@@ -614,30 +632,25 @@ def fmt_mailx(msg, cur, opts)
                                ]
 end
 
-def cmd_scan(*argv)
-  opts = parse argv
-
-  if !opts["args"].empty? && !opts["from"] && !opts["date"] && !opts["subject"]
-    opts["thread"] = true
-  end
+def cmd_scan(argv, cmd="scan")
+  opts = parse(argv, cmd, %w[reverse last: limit: cached
+                             save: add: delete: q fmt: width:])
 
   with_context { |ctx|
     seq, cur = select(ctx, opts)
 
-    if opts["save"]
-      if opts["save"].empty?
-        seq.each_with_index { |msg, i| msg.idx = i+1 }
-        save_seq(default_seq, seq)
-        ctx["#{default_seq}-cur"] = cur
-      else
-        save_seq(opts["save"].first, seq)
-      end
+    if cmd == "read"
+      seq.each_with_index { |msg, i| msg.idx = i+1 }
+      save_seq(default_seq, seq)
+      ctx["#{default_seq}-cur"] = cur
     end
 
+    if opts["save"]
+      save_seq(opts["save"].first, seq)
+    end
     if opts["add"]
       save_seq(opts["add"].first, load_seq(opts["add"].first) | seq)
     end
-
     if opts["delete"]
       save_seq(opts["delete"].first, load_seq(opts["delete"].first) - seq)
     end
@@ -728,8 +741,8 @@ def metamail(file)
   MiniMime.new(text).render.gsub("\r\n", "\n")
 end
 
-def cmd_show(*argv)
-  opts = parse argv
+def cmd_show(argv)
+  opts = parse(argv, "show", %w[nopager keep path raw idx select wide])
   opts['args'] = ["."]  if opts['args'].empty?
 
   if $stdout.tty? && !opts['nopager']
@@ -771,18 +784,18 @@ def cmd_show(*argv)
   cmd_mark(*(seen << "-seen"))  unless opts['keep'] || seen.empty?
 end
 
-def cmd_next
-  cmd_show("next")
+def cmd_next(argv)
+  cmd_show(["next"])
 rescue ArgumentError
   abort "no more mail"
 end
 
-def cmd_prev
-  cmd_show("prev")
+def cmd_prev(argv)
+  cmd_show(["prev"])
 end
 
-def cmd_att(*argv)
-  opts = parse argv
+def cmd_att(argv)
+  opts = parse(argv, "att", %w[f])
 
   seq = load_seq(default_seq)
 
@@ -818,12 +831,12 @@ def cmd_att(*argv)
   }
 end
 
-def cmd_inc(*argv)
-  cmd_folders("-inc")
+def cmd_inc(argv)
+  cmd_folders(["-inc"])
 end  
 
-def cmd_folders(*argv)
-  opts = parse argv
+def cmd_folders(argv)
+  opts = parse(argv, "folders", %w[list u s inc])
 
   num = Hash.new(0)
   unread = Hash.new(0)
@@ -858,8 +871,8 @@ def cmd_folders(*argv)
   }
 end
 
-def cmd_seq(*argv)
-  opts = parse argv
+def cmd_seqs(argv)
+  opts = parse(argv, "seqs", %w[clear])
 
   if opts["clear"]
     opts["clear"].each { |name|
@@ -895,9 +908,12 @@ def generate_mid(from=nil)
 end
 
 HEADER_SEP = "--text follows this line--"
-def cmd_mail(*argv)
-  opts = parse argv
-  to = (opts['args'] + opts['to'].to_a).join(", ")
+def cmd_mail(argv, cmd="mail")
+  opts = parse(argv, cmd, %w[to... cc... bcc... repl... fwd... att...
+                             subject: from: noreplyto noreplyall noquote keep debug])
+  p opts
+  exit
+  to = opts['to'].join(", ")
 
   seq = load_seq(default_seq)
 
@@ -1071,16 +1087,16 @@ def makemime(header, body)
   [header, mimebody]
 end
 
-def cmd_repl(*argv)
-  cmd_mail("-repl", *argv)
+def cmd_repl(argv)
+  cmd_mail(["-repl", *argv], "repl")
 end
 
-def cmd_fwd(*argv)
-  cmd_mail("-fwd", *argv)
+def cmd_fwd(argv)
+  cmd_mail(["-fwd", *argv], "fwd")
 end
 
-def cmd_mark(*argv)
-  opts = parse argv
+def cmd_mark(argv)
+  opts = parse(argv, "mark", %w[flagged unflagged seen unseen replied unreplied])
 
   with_context { |ctx|
     seq, cur = select(ctx, opts)
@@ -1105,12 +1121,12 @@ def cmd_mark(*argv)
   }
 end
 
-def cmd_usage(*argv)
+def cmd_usage(argv)
   puts "Subcommands: " + Object.private_instance_methods.grep(/cmd_/).
     map { |cmd| cmd.sub(/^cmd_/, '') }.sort.join(" ")
 end
 
 command = ARGV.first || 'usage'
 if defined?("cmd_#{command}")
-  send "cmd_#{command}", *ARGV[1..-1]
+  send "cmd_#{command}", ARGV[1..-1]
 end
