@@ -90,6 +90,21 @@ def term_width
   ENV["COLUMNS"].to_i.nonzero? || 80
 end
 
+def parse_config
+  cfg = {}
+
+  begin
+    IO.foreach(File.expand_path("~/.config/coma/config")).each { |line|
+      next  unless line =~ /:/
+      name, value = line.split(":", 2)
+      cfg[name.strip] = value.strip
+    }
+  rescue Errno::ENOENT
+  end
+
+  cfg
+end
+
 def parse(argv, cmd, flags)
   if flags.first =~ /\.\.\.$/
     def_opt = $`
@@ -98,14 +113,8 @@ def parse(argv, cmd, flags)
   end
   opts = {def_opt => []}
 
-  begin
-    IO.foreach(File.expand_path("~/.config/coma/config")).each { |line|
-      name, value = line.split(":", 2)
-      if name =~ /^#{Regexp.quote cmd}:/
-        argv.unshift(*value.split)
-      end
-    }
-  rescue Errno::ENOENT
+  if a = parse_config[cmd]
+    argv.unshift(*a.split)
   end
 
   until argv.empty?
@@ -363,20 +372,10 @@ def select(ctx, opts)
 
   query = opts["args"].join(" ")
 
-  begin
-    aliases = {}
-    IO.foreach(File.expand_path("~/.config/coma/config")).each { |line|
-      name, value = line.split(":", 2)
-      if name =~ /^%/
-        aliases[name] = " #{value.strip} "
-      end
-    }
-    old = ""
-    while query != old
-      old, query = query, query.gsub(/%[\w-]+/) { aliases[$&] || $& }
-    end
-  rescue Errno::ENOENT
-    # ignore
+  aliases = parse_config
+  old = ""
+  while query != old
+    old, query = query, query.gsub(/%[\w-]+/) { aliases[$&] || $& }
   end
 
   scanner = StringScanner.new(query)
@@ -1137,19 +1136,9 @@ def cmd_usage(argv)
 end
 
 command = ARGV.first || 'usage'
-if respond_to?("cmd_#{command}")
+if Object.private_instance_methods.include?("cmd_#{command}")
   send "cmd_#{command}", ARGV[1..-1]
 else
-  addargs = []
-  begin
-    IO.foreach(File.expand_path("~/.config/coma/config")).each { |line|
-      name, value = line.split(":", 2)
-      if name =~ /^#{Regexp.quote command}:/
-        addargs = value.split
-      end
-    }
-  rescue Errno::ENOENT
-  end
-
+  addargs = parse_config[command].to_s.split
   exec "coma-#{command}", *(addargs + ARGV[1..-1])
 end
