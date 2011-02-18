@@ -340,11 +340,12 @@ def select(ctx, opts)
     IO.foreach(File.expand_path("~/.config/coma/config")).each { |line|
       name, value = line.split(":", 2)
       if name =~ /^%/
-        aliases[name] = value.strip
+        aliases[name] = " #{value.strip} "
       end
     }
-    while query.gsub!(/%[\w-]+/) { " #{aliases[$&]} " || $& }
-      # spin
+    old = ""
+    while query != old
+      old, query = query, query.gsub(/%[\w-]+/) { aliases[$&] || $& }
     end
   rescue Errno::ENOENT
     # ignore
