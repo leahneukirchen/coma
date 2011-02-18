@@ -115,6 +115,7 @@ class SqliteCache
 CREATE TABLE IF NOT EXISTS mails (
   id TEXT PRIMARY KEY,
   file TEXT,
+  folder TEXT,
   mid TEXT,
   subject TEXT,
   date DATETIME,
@@ -122,6 +123,7 @@ CREATE TABLE IF NOT EXISTS mails (
   irt TEXT
 );
 CREATE INDEX IF NOT EXISTS mails_file ON mails (file);
+CREATE INDEX IF NOT EXISTS mails_folder ON mails (folder);
 EOF
 
     @db.execute("BEGIN TRANSACTION")
@@ -129,8 +131,9 @@ EOF
   end
 
   def save(msg)
-    @db.execute("INSERT OR REPLACE INTO mails VALUES (?,?,?,?,?,?,?)",
-                msg.id, msg.file, msg.mid, msg.subj, msg.date, msg.from, msg.irt)
+    @db.execute("INSERT OR REPLACE INTO mails VALUES (?,?,?,?,?,?,?,?)",
+                msg.id, msg.file, msg.folder, msg.mid,
+                msg.subj, msg.date, msg.from, msg.irt)
   end
 
   def [](key)
@@ -138,15 +141,21 @@ EOF
       Msg.new(*@db.get_first_row("SELECT * FROM mails WHERE id = ?", key))
   end
 
-  def from_file(key)
+  def from_file(key, folder=nil)
     rec = @db.get_first_row("SELECT * FROM mails WHERE file = ?", key)
     if rec
       Msg.new(*rec)
     else
-      msg = Msg.parse(key)
+      msg = Msg.parse(key, folder)
       save msg
       msg
     end
+  end
+
+  def from_folder(folder)
+    @db.execute("SELECT * FROM mails WHERE folder = ?", folder).map { |row|
+      Msg.new(*row)
+    }
   end
 
   def delete(key)
@@ -155,15 +164,16 @@ EOF
   end
 end
 
-Msg = Struct.new(:id, :file, :mid, :subj, :date, :from, :irt, :idx, :depth)
+Msg = Struct.new(:id, :file, :folder, :mid, :subj, :date, :from, :irt, :idx, :depth)
 class Msg
-  def self.parse(file)
+  def self.parse(file, folder=nil)
     email = MiniMime.new(File.read(file).gsub("\n", "\r\n"))
 
     date = email["date"] ? Time.parse(email["date"]).to_f : File.mtime(file).to_f
 
     Msg.new(file.gsub(/:2,*$/, ''),
             file,
+            folder,
             email["message-id"],
             email["subject"] || "(no subject)",
             date,
@@ -415,22 +425,28 @@ def expr(scanner, ctx, initial, opts)
       folder = scanner.matched
       ctx['folder'] = folder  unless folder == "+"
 
-      fpath = folder2path(folder)
-      if opts["save"] || opts["inc"]
-        begin
-          Dir.foreach(File.join(fpath, "/../new/")) { |file|
-            next  if file =~ /\A\./
-            File.rename "#{fpath}/../new/#{file}", "#{fpath}/#{file}:2,"
-          }
-        rescue Errno::ENOENT
-          abort "coma: no such folder #{fpath}"
+      if opts["cached"]
+        seq = Msg::Cache.from_folder(folder)
+      else
+        fpath = folder2path(folder)
+
+        if opts["inc"] || opts["save"] == []   # on inc, read
+          begin
+            Dir.foreach(File.join(fpath, "/../new/")) { |file|
+              next  if file =~ /\A\./
+              File.rename "#{fpath}/../new/#{file}", "#{fpath}/#{file}:2,"
+            }
+          rescue Errno::ENOENT
+            abort "coma: no such folder #{fpath}"
+          end
         end
+
+        Dir.foreach(fpath) { |file|
+          next  if file =~ /\A\./
+          next  unless File.file? File.join(fpath, file)
+          seq << Msg::Cache.from_file(File.join(fpath, file), folder)
+        }
       end
-      Dir.foreach(fpath) { |file|
-        next  if file =~ /\A\./
-        next  unless File.file? File.join(fpath, file)
-        seq << Msg::Cache.from_file(File.join(fpath, file))
-      }
       using_initial = false
       seq = thread(seq, reverse)
 
