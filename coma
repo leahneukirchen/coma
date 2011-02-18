@@ -620,7 +620,7 @@ end
 def fmt_9fans(msg, cur, opts)
   width = opts['width'] ? opts['width'].to_i : term_width
   if msg.depth == 0
-    puts  if msg.idx > 0
+    puts
     puts nicesubj(msg.subj, width, msg.depth)
   end
   puts "  %4d%s   %s %s" % [msg.idx, (msg.idx == cur ? "*" : " "),
