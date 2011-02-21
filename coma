@@ -73,6 +73,7 @@ def load_seq(name)
 end
 
 def save_seq(name, seq)
+  name = name.sub(/\A%/, "")
   File.open(File.expand_path("~/.config/coma/seq-#{name}"), "w") { |f|
     d = seq.map { |msg|
       [msg.id, msg.depth]
@@ -881,7 +882,7 @@ def cmd_folders(argv)
 end
 
 def cmd_seqs(argv)
-  opts = parse(argv, "seqs", %w[clear list])
+  opts = parse(argv, "seqs", %w[list clear...])
 
   if opts["clear"]
     opts["clear"].each { |name|
