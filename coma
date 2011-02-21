@@ -681,6 +681,26 @@ def cmd_scan(argv, cmd="scan")
   }
 end
 
+def cmd_cur(argv)
+  opts = parse(argv, "cur", %w[folder seq:])
+  
+  seq = (opts["seq"] || default_seq).sub(/\A%/, '')
+
+  with_context { |ctx|
+    print ctx['folder'], " "  if opts["folder"]
+
+    begin
+      items = File.open(File.expand_path("~/.config/coma/seq-#{seq}")) { |f|
+        Marshal.load(f)
+      }
+    rescue Errno::ENOENT
+      abort "coma: no such sequence '#{seq}'"
+    end
+
+    puts "%s/%s" % [ctx["#{seq}-cur"] || "?", items.size]
+  }
+end
+
 def ref2idx(ctx, ref)
   seq = load_seq(default_seq)
 
