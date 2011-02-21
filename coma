@@ -790,7 +790,7 @@ def cmd_show(argv)
     }
   }
 
-  cmd_mark(*(seen << "-seen"))  unless opts['keep'] || seen.empty?
+  cmd_mark(seen << "-seen")  unless opts['keep'] || seen.empty?
 end
 
 def cmd_next(argv)
