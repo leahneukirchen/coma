@@ -207,7 +207,7 @@ class Msg
   def self.parse(file, folder=nil)
     email = MiniMime.new(File.read(file).gsub("\n", "\r\n"))
 
-    date = email["date"] ? Time.parse(email["date"]).to_f : File.mtime(file).to_f
+    date = Time.parse(email["date"]).to_f  rescue File.mtime(file).to_f
 
     Msg.new(file.gsub(/:2,*$/, ''),
             file,
@@ -341,13 +341,20 @@ def nicedate(t)
   end
 end
 
+def safefirst(str, size)
+  str.unpack("U*")[0, size].pack("U*")
+rescue ArgumentError  # invalid UTF-8
+  str[0, size]
+end
+
 def nicefrom(t, size)
   size = [0, size].max
+  t ||= "(empty)"
   if t =~ /(.*) <.*>/
     t = $1.delete('"')
   end
   t = t.strip.squeeze(" ")
-  (t + " "*size).unpack("U*")[0, size].pack("U*")
+  safefirst(t + " "*size, size)
 end
 
 def strip_re(s)
@@ -359,7 +366,7 @@ end
 
 def nicesubj(s, size, depth)
   s = strip_re(s)  if depth > 0
-  ("  "*depth + s).unpack("U*")[0, size].pack("U*").ljust(size)
+  safefirst("  "*depth + s, size).ljust(size)
 end
 
 TOKEN = "[-#!$%&'*+.^_{}|\\w]+"
@@ -408,7 +415,7 @@ def expr(scanner, ctx, initial, opts)
 
     elsif scanner.scan(/\.?\/\S+/)
       selected = []  if selected == :all
-      seq << scanner.matched
+      seq << Msg::Cache.from_file(scanner.matched)
       selected << seq.size-1
 
     elsif scanner.scan(/thread/)

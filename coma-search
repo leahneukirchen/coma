@@ -1,5 +1,5 @@
 #!/bin/sh
 # coma-search - search with mairix and read results, kept in %search
 
-mairix -r "$@" | coma scan -q - -save %search
+mairix -r "$@" | coma scan -q - -save %search &&
 coma read %search
