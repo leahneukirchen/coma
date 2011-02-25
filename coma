@@ -734,9 +734,15 @@ def ref2idx(ctx, ref)
   when /(.*):([+-]?)(\d+)\z/
     idx = ref2idx(ctx, $1)
     case $2
-    when "";  idx..idx+Integer($3) #XXX not MH-style, depends on first/last
-    when "+"; idx..idx+Integer($3)
-    when "-"; idx-Integer($3)..idx
+    when ""; 
+      case $1
+      when "prev", "last"
+        idx-Integer($3)+1..idx
+      else
+        idx..idx+Integer($3)-1
+      end
+    when "+"; idx..idx+Integer($3)-1
+    when "-"; idx-Integer($3)+1..idx
     end
   when /.-./
     a, b = ref.split("-", 2)
