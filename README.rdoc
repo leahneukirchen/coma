@@ -183,6 +183,14 @@ be deleted with "coma seqs -clear sequencename...".  You can add mails
 to a sequence with "coma scan ... -add sequencename" or remove mails
 with "coma scan ... -delete sequencename".
 
+== Config file
+
+You can create a ~/.config/coma/config like this:
+
+  path: /path/to/your/maildirs
+  scan: -default -arguments -for -scan
+  %alias: %for +often +needed %sequence +expressions
+
 == Dependencies
 
 Ruby 1.8 and sqlite3.
