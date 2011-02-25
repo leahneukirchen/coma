@@ -577,7 +577,8 @@ def fmt_default(msg, cur, opts)
     idx = ''
     flag = nil
   end
-  flag ||= (msg.flags !~ /S/ ? "." : " ")
+  flag ||= (msg.flags !~ /S/ ? "." : nil)
+  flag ||= (msg.flags !~ /T/ ? " " : "x")
   puts "%4s%1s%1s%10s  %s  %s\n" % [idx,
                                     flag,
                                     (msg.flags =~ /R/ ? "-" : " "),
@@ -597,7 +598,8 @@ def fmt_nmh(msg, cur, opts)
     idx = ''
     flag = nil
   end
-  flag ||= (msg.flags !~ /S/ ? "." : " ")
+  flag ||= (msg.flags !~ /S/ ? "." : nil)
+  flag ||= (msg.flags !~ /T/ ? " " : "x")
   puts "%4s%1s%1s%4s  %s  %s\n" % [idx,
                                     flag,
                                     (msg.flags =~ /R/ ? "-" : " "),
@@ -643,7 +645,7 @@ end
 def fmt_mailx(msg, cur, opts)
   width = opts['width'] ? opts['width'].to_i : term_width
   puts "%s%s%s%4d %s   %s %s" % [msg.idx == cur ? ">" : " ",
-                                msg.flags =~ /S/ ? " " : "N",
+                                msg.flags =~ /S/ ? (msg.flags=~/T/?"K":" "):"N",
                                 msg.flags =~ /R/ ? "R" : " ",
                                 msg.idx,
                                 nicefrom(msg.from, 17),
