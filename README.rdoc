@@ -51,7 +51,7 @@ How do you use coma?  The default workflow for coma works like this:
 * You setup a reading sequence you want to progress in; usually this
   is saved in your config, here is an explicit variant:
 
-    % coma read +INBOX +ruby-talk -thread -unseen
+    % coma read +INBOX +ruby-talk thread unseen
     [...scan lines of new mail...]
 
 * You read the mails:
@@ -80,6 +80,10 @@ For content searches, I recommend using mairix:
 
   % mairix -r SEARCH TERMS | coma read -
 
+Put the included "coma-search" wrapper into your path to simply use:
+
+  % coma search SEARCH TERMS
+
 == Sending mail
 
   % coma mail ... [-cc ...] [-bcc ...] [-att ...]
@@ -91,7 +95,8 @@ For content searches, I recommend using mairix:
 == Other commands
 
   % coma
-  Subcommands: att folders fwd inc mail mark next prev read repl scan show usage
+  Subcommands: att copy cur expunge folders fwd inc mail mark mkdir move
+    next prev read repl scan seqs show usage
 
 Folder list:
 
@@ -168,10 +173,11 @@ implemented easily:
       367 _why                Mon Apr 07 21:17     camping moved to github        
      1133 Magnus Holm         Wed Jun 30 13:18 Access to github.com/camping       
 
-Working with sequences: Sequences are refered to in the query language
-as "%sequencename".  By default, you operate on the sequence
-"%default" (or $COMASEQ if set).  You can list sequences with
-"coma seqs":
+== Working with sequences
+
+Sequences are refered to in the query language as "%sequencename".  By
+default, you operate on the sequence "%default" (or $COMASEQ if set).
+You can list sequences with "coma seqs":
 
   % coma seqs
   %default         1250 messages
@@ -182,6 +188,9 @@ Sequences are created with "coma scan ... -save sequencename", and can
 be deleted with "coma seqs -clear sequencename...".  You can add mails
 to a sequence with "coma scan ... -add sequencename" or remove mails
 with "coma scan ... -delete sequencename".
+
+There are two special sequences, "%" and "%-" which are the sequence
+expressions of the current and the last "coma read", respectively.
 
 == Config file
 
