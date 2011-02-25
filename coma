@@ -1166,6 +1166,77 @@ def cmd_mark(argv)
   }
 end
 
+def copymove(cmd, argv)
+  opts = parse(argv, cmd, %w[])
+    
+  with_context { |ctx|
+    if opts["args"].size == 0
+      abort "coma: #{cmd}: no target given."
+    elsif opts["args"].size == 1
+      warn %Q{Use "coma #{cmd} all" if you want to mark the whole sequence.}
+      abort 'coma: no messages selected.'
+    end
+
+    folder = opts["args"].pop
+    dest = folder2path(folder)
+
+    unless dest && File.directory?(dest)
+      abort "coma: #{cmd}: target #{folder} is not a directory"
+    end
+
+    seq, cur = select(ctx, opts)
+
+    require 'socket'
+    host = Socket.gethostname
+
+    Dir.chdir(dest + "/..") {
+      seq.each_with_index { |msg, q|
+
+        begin
+          t = Time.now
+          unique = "%d.M%dP%dQ%d.%s" % [t.to_i, t.usec, Process.pid, q, host]
+          
+          target = "cur/#{unique}:2,#{msg.flags}"
+          
+          File.stat(target)
+          raise Errno::EEXIST  # stat was successful
+        rescue Errno::ENOENT
+          # great, go on!
+        rescue SystemCallError
+          sleep 2
+          retry
+        end
+  
+        case cmd
+        when "move"
+          File.rename(msg.file, target)
+          
+          Msg::Cache.delete(msg.id)
+          newmsg = Msg::Cache.from_file(target, folder)
+        when "copy"
+          content = File.read(msg.file)
+          File.open(target, "wb") { |copy|
+            copy << content
+            copy.fsync
+          }
+
+          newmsg = Msg::Cache.from_file(target, folder)
+        else
+          raise NotImplemented, "copymove: #{cmd}"
+        end
+      }
+    }
+  }
+end
+
+def cmd_copy(argv)
+  copymove("copy", argv)
+end
+
+def cmd_move(argv)
+  copymove("move", argv)
+end
+
 def cmd_usage(argv)
   puts "Subcommands: " + Object.private_instance_methods.grep(/cmd_/).
     map { |cmd| cmd.sub(/^cmd_/, '') }.sort.join(" ")
