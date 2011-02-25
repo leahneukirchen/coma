@@ -1142,10 +1142,7 @@ end
 def cmd_mark(argv)
   opts = parse(argv, "mark", %w[flagged unflagged replied unreplied seen unseen trashed untrashed])
 
-  if opts["args"].empty?
-    warn 'Use "coma mark all" if you want to mark the whole sequence.'
-    abort 'coma: no messages selected.'
-  end
+  opts['args'] = ["."]  if opts['args'].empty?
 
   with_context { |ctx|
     seq, cur = select(ctx, opts)
