@@ -1,5 +1,8 @@
 = coma - a console mail user agent
 
+THIS IS ALPHA SOFTWARE WITHOUT ANY WARRANTY.  PLEASE KEEP BACKUPS OF
+YOUR MAIL, ESPECIALLY IF YOU USE DESTRUCTIVE OPERATIONS.
+
 == About
 
 This is coma, a simple but powerful console mail user agent.  You can
@@ -102,6 +105,16 @@ Marking mails:
   % coma mark unseen -seen
   % coma mark 666 667 -flagged
 
+Deleting mail:
+
+  % coma mark 666 667 -trashed
+  % coma expunge
+
+Moving and copying mail:
+
+  % coma move "date<2000-01-01" +archive
+  % coma copy +announcements   # defaults to .
+
 Reading attachments:
 
   % coma show
@@ -127,7 +140,7 @@ Scanning mail (like read, but don't change the current sequence):
 scan (and read) support various scan line formats, others can be
 implemented easily:
 
-  % coma scan "363 367 1133"        
+  % coma scan 363 367 1133
    363  2008-01-10  Jeremy McAnally    Keeping Camping going                      
    367  2008-04-07  _why                   camping moved to github                
   1133  2010-06-30  Magnus Holm        Access to github.com/camping               
@@ -135,7 +148,7 @@ implemented easily:
    363  01/10  Jeremy McAnally    Keeping Camping going<<all, I'm not sure who Cam
    367  04/07  _why               camping moved to github<<the better interest of 
   1133  06/30  Magnus Holm        Access to github.com/camping<<I've converted the
-  % coma scan "363 367 1133" -fmt twoline
+  % coma scan 363 367 1133 -fmt twoline
    363 Keeping Camping going                      
      S 2008-01-10 05:29  "Jeremy McAnally" <jeremymcanally@gmail.com>
    367     camping moved to github                
@@ -150,7 +163,7 @@ implemented easily:
   
   Access to github.com/camping                                                    
     1133    Magnus Holm                            Wed, 30 Jun 2010 13:18:49 +0200
-  % coma scan "363 367 1133" -fmt mailx
+  % coma scan 363 367 1133 -fmt mailx
       363 Jeremy McAnally     Thu Jan 10 05:29 Keeping Camping going              
       367 _why                Mon Apr 07 21:17     camping moved to github        
      1133 Magnus Holm         Wed Jun 30 13:18 Access to github.com/camping       
@@ -186,13 +199,6 @@ images.
 tkma provides a very early exmh-like interface for coma.  Needs Tk.
 
 http://imgur.com/n6dFT.png
-
-== Can I ...?
-
-I accept no feature requests at this point; coma will become *my*
-perfect mail reader.  But you are welcome to fork and patch, and maybe
-in a few months, we can figure out what's good and what not, and then
-merge accordingly.
 
 == Copying
 
