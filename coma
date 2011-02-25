@@ -1241,7 +1241,7 @@ def cmd_move(argv)
 end
 
 def cmd_expunge(argv)
-  opts = parse(argv, "copy", %w[n])
+  opts = parse(argv, "expunge", %w[n])
     
   with_context { |ctx|
     seq, cur = select(ctx, opts)
