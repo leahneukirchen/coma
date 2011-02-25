@@ -521,6 +521,10 @@ def expr(scanner, ctx, initial, opts)
       seq = seq.find_all { |msg| msg.flags =~ /R/ }
     elsif scanner.scan(/unreplied/)
       seq = seq.find_all { |msg| msg.flags !~ /R/ }
+    elsif scanner.scan(/trashed/)
+      seq = seq.find_all { |msg| msg.flags =~ /T/ }
+    elsif scanner.scan(/untrashed/)
+      seq = seq.find_all { |msg| msg.flags !~ /T/ }
 
     elsif scanner.scan(/subject/)
       seq = seq.sort_by { |msg|
@@ -1136,7 +1140,7 @@ def cmd_fwd(argv)
 end
 
 def cmd_mark(argv)
-  opts = parse(argv, "mark", %w[flagged unflagged seen unseen replied unreplied])
+  opts = parse(argv, "mark", %w[flagged unflagged replied unreplied seen unseen trashed untrashed])
 
   if opts["args"].empty?
     warn 'Use "coma mark all" if you want to mark the whole sequence.'
@@ -1155,6 +1159,8 @@ def cmd_mark(argv)
       flags -= ["S"]  if opts['unseen']
       flags |= ["R"]  if opts['replied']
       flags -= ["R"]  if opts['unreplied']
+      flags |= ["T"]  if opts['trashed']
+      flags -= ["T"]  if opts['untrashed']
 
       msg.flags = flags.sort.join
 
@@ -1235,6 +1241,25 @@ end
 
 def cmd_move(argv)
   copymove("move", argv)
+end
+
+def cmd_expunge(argv)
+  opts = parse(argv, "copy", %w[n])
+    
+  with_context { |ctx|
+    seq, cur = select(ctx, opts)
+
+    seq.each { |msg|
+      if msg.flags =~ /T/
+        if opts["n"]
+          puts "rm #{msg.file}"
+        else
+          File.unlink msg.file
+          Msg::Cache.delete(msg.id)
+        end
+      end
+    }
+  }  
 end
 
 def cmd_usage(argv)
