@@ -368,6 +368,20 @@ def nicesubj(s, size, depth)
   safefirst("  "*depth + s, size).ljust(size)
 end
 
+def expand_aliases(query, ctx)
+  aliases = parse_config
+
+  aliases["%"] = ctx["#{default_seq}-expr"]
+  aliases["%-"] = ctx["#{default_seq}-last-expr"]
+
+  old = ""
+  while query != old
+    old, query = query, query.gsub(/%[\w-]*/) { aliases[$&] || $& }
+  end
+
+  query
+end
+
 TOKEN = "[-#!$%&'*+.^_{}|\\w]+"
 def select(ctx, opts)
   seq = load_seq(default_seq)
@@ -379,11 +393,7 @@ def select(ctx, opts)
 
   query = opts["args"].join(" ")
 
-  aliases = parse_config
-  old = ""
-  while query != old
-    old, query = query, query.gsub(/%[\w-]+/) { aliases[$&] || $& }
-  end
+  query = expand_aliases(query, ctx)
 
   scanner = StringScanner.new(query)
   seq = expr(scanner, ctx, seq.dup, opts)
@@ -665,6 +675,8 @@ def cmd_scan(argv, cmd="scan")
       seq.each_with_index { |msg, i| msg.idx = i+1 }
       save_seq(default_seq, seq)
       ctx["#{default_seq}-cur"] = cur
+      ctx["#{default_seq}-last-expr"] = ctx["#{default_seq}-expr"]
+      ctx["#{default_seq}-expr"] = expand_aliases(opts['args'].join(" "), ctx)
     end
 
     if opts["save"]
