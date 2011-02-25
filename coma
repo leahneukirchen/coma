@@ -59,14 +59,13 @@ def load_seq(name)
   end
   i = 1
   seq.map { |(id, depth)|
-    begin
-      msg = Msg::Cache[id]
-      msg.idx = i
-      msg.depth = depth
-      
-      i+=1
+    msg = Msg::Cache[id]
+    msg.idx = i
+    msg.depth = depth
+    i += 1
+    if msg.id   # Does that message actually exist?
       msg
-    rescue Errno::ENOENT
+    else
       nil
     end
   }.compact
