@@ -955,8 +955,6 @@ HEADER_SEP = "--text follows this line--"
 def cmd_mail(argv, cmd="mail")
   opts = parse(argv, cmd, %w[to... cc... bcc... repl... fwd... att...
                              subject: from: noreplyto noreplyall noquote keep debug])
-  p opts
-  exit
   to = opts['to'].join(", ")
 
   seq = load_seq(default_seq)
@@ -1030,13 +1028,26 @@ def cmd_mail(argv, cmd="mail")
 
       parsed = MiniMime.new(mail.sub(HEADER_SEP, "").gsub("\n", "\r\n"))
       from = parsed["from"]
+      fcc = parsed["fcc"]
 
-      headers, body = mail.split(HEADER_SEP, 2)
+      headers, body = mail.split(HEADER_SEP + "\n", 2)
+
+      headers.gsub!(/^fcc\s*:.*(\n|\Z)/i, '')  # Strip Fcc:
 
       headers << "Message-Id: #{generate_mid(from)}\n"
       headers << "X-Mailer: coma/#{COMA_VERSION}\n"
 
       headers, body = makemime(headers, body)
+
+      if fcc
+        Tempfile.open("coma-fcc") { |out|
+          out.write headers
+          out.write "\n"
+          out.write body
+          out.close
+          cmd_copy([out.path, fcc])
+        }
+      end
 
       if opts['debug']
         puts headers
