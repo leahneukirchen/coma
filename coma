@@ -59,13 +59,13 @@ def contextfile
   File.expand_path("~/.config/coma/context")
 end
 
-def load_seq(name)
+def load_seq(name, nowarn=false)
   begin
     seq = File.open(File.expand_path("~/.config/coma/seq-#{name}")) { |f|
       Marshal.load(f)
     }
-  rescue Errno::ENOENT
-    warn "coma: no such sequence '#{name}'"
+  rescue Errno::ENOENT, EOFError
+    warn "coma: no such sequence '#{name}'"  unless nowarn
     seq = []
   end
   i = 1
@@ -380,7 +380,7 @@ end
 
 TOKEN = "[-#!$%&'*+.^_{}|\\w]+"
 def select(ctx, opts)
-  seq = load_seq(default_seq)
+  seq = load_seq(default_seq, true)
 
   mid = seq[ctx["#{default_seq}-cur"]-1].mid  rescue nil
 
@@ -853,7 +853,7 @@ end
 def cmd_att(argv)
   opts = parse(argv, "att", %w[f])
 
-  seq = load_seq(default_seq)
+  seq = load_seq(default_seq, true)
 
   with_context { |ctx|
     msg = seq[ctx["#{default_seq}-cur"] - 1]
