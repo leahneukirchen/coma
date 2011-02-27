@@ -436,7 +436,7 @@ def expr(scanner, ctx, initial, opts)
     elsif scanner.scan(/(next|prev|cur|\.|first|last|all|thr|sub(?!j)|[+-]?\d+)(:([+-]?(\d+)|thr|sub)|-(next|prev|cur|\.|first|last|all|(\d+)))?/)
 
       selected = []  if selected == :all
-      [*ref2idx(ctx, scanner.matched)].each { |idx|
+      [*ref2idx(ctx, scanner.matched, seq)].each { |idx|
         selected << idx-1
       }
 
@@ -730,9 +730,7 @@ def cmd_cur(argv)
   }
 end
 
-def ref2idx(ctx, ref)
-  seq = load_seq(default_seq)
-
+def ref2idx(ctx, ref, seq)
   case ref
   when "next"
     ref = "+1"
@@ -744,7 +742,7 @@ def ref2idx(ctx, ref)
 
   case ref
   when /(.*):([+-]?)(\d+)\z/
-    idx = ref2idx(ctx, $1)
+    idx = ref2idx(ctx, $1, seq)
     case $2
     when ""; 
       case $1
@@ -758,7 +756,7 @@ def ref2idx(ctx, ref)
     end
   when /.-./
     a, b = ref.split("-", 2)
-    ref2idx(ctx, a)..ref2idx(ctx, b)
+    ref2idx(ctx, a, seq)..ref2idx(ctx, b, seq)
   when /\A[+-]\d+\z/
     case ctx["#{default_seq}-cur"] + Integer(ref)
     when 1..seq.size
@@ -780,9 +778,9 @@ def ref2idx(ctx, ref)
   when "all"
     1..seq.size
   when "thr"
-    ref2idx(ctx, "cur:thr")
+    ref2idx(ctx, "cur:thr", seq)
   when /(.*):thr\z/
-    start = ref2idx(ctx, $1)
+    start = ref2idx(ctx, $1, seq)
     while start > 1 && seq[start-1].depth > 0
       start -= 1
     end
@@ -792,9 +790,9 @@ def ref2idx(ctx, ref)
     end
     start..stop-1
   when "sub"
-    ref2idx(ctx, "cur:sub")
+    ref2idx(ctx, "cur:sub", seq)
   when /(.*):sub\z/
-    start = ref2idx(ctx, $1)
+    start = ref2idx(ctx, $1, seq)
     depth = seq[start-1].depth
     stop = start + 1
     while stop <= seq.size && seq[stop-1].depth > depth
@@ -1004,7 +1002,7 @@ def cmd_mail(argv, cmd="mail")
   with_context { |ctx|
     if opts['repl']
       ref = opts['repl'].first || "."
-      msg = seq[ref2idx(ctx, ref) - 1]
+      msg = seq[ref2idx(ctx, ref, seq) - 1]
 
       re = MiniMime.new(File.read(file).gsub("\n", "\r\n"))
       if re['reply-to'] && !opts['noreplyto']
@@ -1022,7 +1020,7 @@ def cmd_mail(argv, cmd="mail")
 
     elsif opts['fwd']
       ref = opts['fwd'].first || "."
-      msg = seq[ref2idx(ctx, ref)-1]
+      msg = seq[ref2idx(ctx, ref, seq)-1]
       opts['subject'] = ["Fwd: " + strip_re(msg.subj)]
       from = msg.from
       original_mail = File.read(file)
