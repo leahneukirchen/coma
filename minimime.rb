@@ -38,13 +38,13 @@ class MiniMime
     str.gsub!(/\?\=\=\?/, '?= =?')
 
     str.split(" ").map { |word|
-      if word =~ /=\?(.+)\?[Bb]\?(.*)\?=/m
+      if word =~ /=\?(.+?)\?[Bb]\?(.*?)\?=/m
         begin
           Iconv.conv("#{encoding}//IGNORE", $1, $2.unpack("m*").first)
         rescue Iconv::InvalidCharacter
           $2.unpack("m*").first
         end
-      elsif word =~ /=\?(.+)\?[Qq]\?(.*)\?=/m
+      elsif word =~ /=\?(.+?)\?[Qq]\?(.*?)\?=/m
         begin
           Iconv.conv("#{encoding}//IGNORE", $1, $2.unpack("M*").first).tr('_', ' ')
         rescue Iconv::InvalidCharacter
