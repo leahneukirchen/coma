@@ -16,6 +16,8 @@ class MiniMime
 
     @header.to_s.gsub(/[\t ]*\r\n[\t ]+/, ' ').split("\r\n").each { |line|
       field, value = line.split(":", 2)
+      next  unless value  # malformed header line
+
       if @fields[field.downcase.strip]
         @fields[field.downcase.strip] << "\n" << value.strip
       else
