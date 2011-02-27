@@ -54,6 +54,8 @@ How do you use coma?  The default workflow for coma works like this:
     % coma read +INBOX +ruby-talk thread unseen
     [...scan lines of new mail...]
 
+  By default, "inc" sets up a reading sequence containing all fresh mail.
+
 * You read the mails:
     % coma show
     % coma next

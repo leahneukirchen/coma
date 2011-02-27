@@ -462,6 +462,7 @@ def expr(scanner, ctx, initial, opts)
 
     elsif scanner.scan(/\+(\S*)/)
       seq = []  if using_initial
+      inc = []
 
       folder = scanner.matched
       ctx['folder'] = folder  unless folder == "+"
@@ -471,23 +472,33 @@ def expr(scanner, ctx, initial, opts)
       else
         fpath = folder2path(folder)
 
-        if opts["inc"] || opts["save"] == "."   # on inc, read
+        if opts["inc"]          # on inc, read
           begin
             Dir.foreach(File.join(fpath, "/../new/")) { |file|
               next  if file =~ /\A\./
-              File.rename "#{fpath}/../new/#{file}", "#{fpath}/#{file}:2,"
+              newfile = file
+              newfile << ":2,"  unless newfile =~ /:2,/
+              File.rename "#{fpath}/../new/#{file}", "#{fpath}/#{newfile}"
+              inc << Msg::Cache.from_file("#{fpath}/#{newfile}", folder)
             }
           rescue Errno::ENOENT
             abort "coma: no such folder #{fpath}"
           end
         end
 
-        Dir.foreach(fpath) { |file|
-          next  if file =~ /\A\./
-          next  unless File.file? File.join(fpath, file)
-          seq << Msg::Cache.from_file(File.join(fpath, file), folder)
-        }
+        begin
+          Dir.foreach(fpath) { |file|
+            next  if file =~ /\A\./
+            next  unless File.file? File.join(fpath, file)
+            seq << Msg::Cache.from_file(File.join(fpath, file), folder)
+          }
+        rescue Errno::ENOENT
+          abort "coma: no such folder #{fpath}"
+        end
       end
+
+      save_seq("inc", load_seq("inc", true) | inc)  if opts["inc"]
+
       using_initial = false
       seq = thread(seq, reverse)
 
@@ -888,7 +899,12 @@ def cmd_att(argv)
 end
 
 def cmd_inc(argv)
-  cmd_folders(["-inc"])
+  folders = cmd_folders(["-inc"])
+  exit  if folders.empty?
+
+  save_seq("inc", [])
+  cmd_read(["-q", *folders] << "unseen")
+  cmd_read(["%inc"])
 end  
 
 def cmd_folders(argv)
@@ -897,6 +913,7 @@ def cmd_folders(argv)
   num = Hash.new(0)
   unread = Hash.new(0)
   new = Hash.new(0)
+  inc = []
 
   if opts['list']
     puts Dir[File.expand_path($MAILDIR_PREFIX) + "/**/cur"].map { |folder|
@@ -924,7 +941,11 @@ def cmd_folders(argv)
     else
       puts "%-20s %5d messages %5d unread %5d new" % [f, num[folder], unread[folder], new[folder]]
     end
+
+    inc << f
   }
+
+  inc
 end
 
 def cmd_seqs(argv)
