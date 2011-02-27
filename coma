@@ -197,6 +197,11 @@ EOF
   end
 end
 
+def stripirt(irt)
+  return nil  if irt.nil?
+  irt[/.*(<[^>]+>)/, 1]
+end
+
 Msg = Struct.new(:id, :file, :folder, :mid, :subj, :date, :from, :irt, :idx, :depth)
 class Msg
   def self.parse(file, folder=nil)
@@ -211,7 +216,7 @@ class Msg
             email["subject"] || "(no subject)",
             date,
             email["from"],
-            email["in-reply-to"],
+            stripirt(email["in-reply-to"]),
             nil, 0)
   end
 
