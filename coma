@@ -652,11 +652,13 @@ def fmt_twoline(msg, cur, opts)
 end
 
 # inspired by 9fans.net/archive
+$fmt_9fans_lastsubj = nil
 def fmt_9fans(msg, cur, opts)
   width = opts['width'] ? opts['width'].to_i : term_width
-  if msg.depth == 0
-    puts
-    puts nicesubj(msg.subj, width, msg.depth)
+  subj = nicesubj(msg.subj, width, 0)
+  if msg.depth == 0 && $fmt_9fans_lastsubj != subj
+    puts "", subj
+    $fmt_9fans_lastsubj = subj
   end
   puts "  %4d%s   %s %s" % [msg.idx, (msg.idx == cur ? "*" : " "),
                             nicefrom(msg.from, width-42),
