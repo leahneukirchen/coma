@@ -236,7 +236,7 @@ end
 def thread(seq, reverse)
   mails = seq.map { |msg|
     re_in_subj = false
-    sortsubj = msg.subj.strip.gsub(/^(re\[\d+\][:;]\s*)+/i) {
+    sortsubj = msg.subj.strip.gsub(/^(re(\[\d+\])?[:;]\s*)+/i) {
       re_in_subj = true
       ""
     }
@@ -301,7 +301,7 @@ def thread(seq, reverse)
 
     subjsets[subj].each { |msg|
       if msg[:re_in_subj]
-        tree[parent[mid]][msg[:mid]] = msg
+        tree[parent[:mid]][msg[:mid]] = msg
         toplevel.delete msg[:mid]
       end
     }
