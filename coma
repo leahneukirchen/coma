@@ -481,7 +481,7 @@ def expr(scanner, ctx, initial, opts)
           begin
             Dir.foreach(File.join(fpath, "/../new/")) { |file|
               next  if file =~ /\A\./
-              newfile = file
+              newfile = file.dup
               newfile << ":2,"  unless newfile =~ /:2,/
               File.rename "#{fpath}/../new/#{file}", "#{fpath}/#{newfile}"
               inc << Msg::Cache.from_file("#{fpath}/#{newfile}", folder)
